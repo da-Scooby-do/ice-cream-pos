@@ -112,3 +112,12 @@ export type AdminPackaging = {
   sort_order: number;
   is_active: boolean;
 };
+
+export type AdminStaff = {
+  id: string;
+  name: string;
+  role: Role;
+  is_active: boolean;
+  created_at: string;
+  last_shift_at: string | null;
+};

@@ -23,6 +23,7 @@ An Arabic, right-to-left point-of-sale and inventory system for a single ice cre
 | **تقفيل الوردية** | Count the drawer → see cash vs card, expected vs counted, **short / over** → prints the Z-report. |
 | **لوحة المدير** | Live shift totals, daily sales, top flavors, low stock, void orders, restock — works on a phone. |
 | **إدارة الأصناف** | The manager adds and edits products (type, price, scoops, max flavors, which cup/cone/spoon it uses), flavors (name, button colour), extras, and cups/cones. Items are hidden rather than deleted, so old receipts stay intact. |
+| **الموظفون** | The manager adds cashiers and managers, renames them, resets PINs, and suspends accounts. Changes apply on the next click — no waiting for old logins to expire. A manager can't demote or suspend themselves, and the last manager can't be removed. |
 
 ## الأمان | Security
 
@@ -42,16 +43,14 @@ Run these in the Supabase **SQL Editor**, in order:
 
 1. `supabase/migrations/0001_init.sql` — tables
 2. `supabase/migrations/0002_functions.sql` — sales logic, shift close, reports, security
-3. `supabase/seed.sql` — starting flavors, cups, extras, prices, and two users
+3. `supabase/migrations/0003_staff_admin.sql` — staff management
+4. `supabase/seed.sql` — starting flavors, cups, extras, prices, and two users
 
 > ⚠️ **غيّر الأرقام السرية فوراً.** The seed creates `المدير` (PIN **1234**) and `كاشير 1` (PIN **1111**). Change them:
 > ```sql
 > select set_staff_pin((select id from staff where name = 'المدير'), '8642');
 > ```
-> Add a cashier:
-> ```sql
-> insert into staff (name, pin_hash, role) values ('أحمد', crypt('2580', gen_salt('bf')), 'cashier');
-> ```
+> Or simply log in as المدير and use **الموظفون** to change PINs and add cashiers.
 
 The seeded **prices are placeholders** — set the real ones from **الأصناف والأسعار** in the app.
 
@@ -123,6 +122,7 @@ src/
   app/reports     manager dashboard
   app/products    add / edit products, flavors, extras, packaging
   app/inventory   restock
+  app/staff       add / edit cashiers and managers
   lib/actions.ts  server actions (all mutations)
   lib/queries.ts  server reads
   lib/session.ts  signed PIN session

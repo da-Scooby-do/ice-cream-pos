@@ -453,3 +453,85 @@ export async function savePackagingAction(input: PackagingInput): Promise<Action
     return fail(e);
   }
 }
+
+// ---------------------------------------------------------------------
+// الموظفون | add / edit staff. Manager only.
+// Guards against locking the shop out: a manager can't demote or disable
+// themselves, and the last active manager can't be removed.
+// ---------------------------------------------------------------------
+export type StaffInput = {
+  id?: string;
+  name: string;
+  role: "cashier" | "manager";
+  /** required when adding; when editing, empty keeps the current PIN */
+  pin?: string;
+  is_active: boolean;
+};
+
+export async function saveStaffAction(input: StaffInput): Promise<ActionResult> {
+  try {
+    const me = await requireManager();
+    const name = cleanName(input.name);
+    if (input.role !== "cashier" && input.role !== "manager") {
+      throw new Error("الصلاحية غير صحيحة");
+    }
+    const pin = String(input.pin ?? "").trim();
+    if (pin && !/^\d{4,6}$/.test(pin)) throw new Error("الرقم السري من 4 إلى 6 أرقام");
+
+    const client = db();
+
+    if (!input.id) {
+      if (!pin) throw new Error("اكتب رقماً سرياً للموظف الجديد");
+      const { data: id, error } = await client.rpc("create_staff", {
+        p_name: name,
+        p_role: input.role,
+        p_pin: pin,
+      });
+      if (error) throw dbError(error);
+      if (!input.is_active) {
+        const { error: e2 } = await client.from("staff").update({ is_active: false }).eq("id", id);
+        if (e2) throw dbError(e2);
+      }
+    } else {
+      const losesManager = input.role !== "manager" || !input.is_active;
+
+      if (input.id === me.staffId && losesManager) {
+        throw new Error("لا يمكنك إيقاف حسابك أو إلغاء صلاحية المدير عن نفسك");
+      }
+
+      if (losesManager) {
+        const { data: current, error: e1 } = await client
+          .from("staff").select("role,is_active").eq("id", input.id).single();
+        if (e1) throw dbError(e1);
+
+        if (current.role === "manager" && current.is_active) {
+          const { count, error: e2 } = await client
+            .from("staff")
+            .select("id", { count: "exact", head: true })
+            .eq("role", "manager")
+            .eq("is_active", true)
+            .neq("id", input.id);
+          if (e2) throw dbError(e2);
+          if (!count) throw new Error("يجب أن يبقى مدير واحد نشط على الأقل");
+        }
+      }
+
+      const { error } = await client
+        .from("staff")
+        .update({ name, role: input.role, is_active: !!input.is_active })
+        .eq("id", input.id);
+      if (error) throw dbError(error);
+
+      if (pin) {
+        const { error: e3 } = await client.rpc("set_staff_pin", { p_staff_id: input.id, p_pin: pin });
+        if (e3) throw dbError(e3);
+      }
+    }
+
+    revalidatePath("/staff");
+    revalidatePath("/login");
+    return { ok: true, data: null };
+  } catch (e) {
+    return fail(e);
+  }
+}

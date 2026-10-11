@@ -1,7 +1,7 @@
 // قراءات السيرفر | server-side reads, used by Server Components.
 import { db } from "./supabase";
 import type {
-  AdminExtra, AdminFlavor, AdminPackaging, AdminVariant,
+  AdminExtra, AdminFlavor, AdminPackaging, AdminStaff, AdminVariant,
   Extra, Flavor, LowStockRow, ShiftSummary, Staff, Variant,
 } from "./types";
 
@@ -163,4 +163,23 @@ export async function getCatalogAdmin() {
     extras: (extras.data ?? []) as AdminExtra[],
     packaging: (packaging.data ?? []) as AdminPackaging[],
   };
+}
+
+/** الموظفون مع آخر وردية | all staff (inactive too) with their latest shift. */
+export async function getStaffAdmin(): Promise<AdminStaff[]> {
+  const { data, error } = await db()
+    .from("staff")
+    .select("id,name,role,is_active,created_at,shifts(opened_at)")
+    .order("is_active", { ascending: false })
+    .order("role", { ascending: false })
+    .order("name")
+    .order("opened_at", { referencedTable: "shifts", ascending: false })
+    .limit(1, { referencedTable: "shifts" });
+  if (error) throw new Error(error.message);
+
+  type Row = Omit<AdminStaff, "last_shift_at"> & { shifts: { opened_at: string }[] | null };
+  return ((data ?? []) as Row[]).map(({ shifts, ...r }) => ({
+    ...r,
+    last_shift_at: shifts?.[0]?.opened_at ?? null,
+  }));
 }

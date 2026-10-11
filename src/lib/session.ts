@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import crypto from "node:crypto";
 import { env } from "./env";
+import { db } from "./supabase";
 import type { Role } from "./types";
 
 // جلسة الكاشير | cashier session.
@@ -66,7 +67,21 @@ export async function setSession(s: Omit<Session, "at">): Promise<void> {
 export async function getSession(): Promise<Session | null> {
   const store = await cookies();
   const raw = store.get(COOKIE)?.value;
-  return raw ? deserialize(raw) : null;
+  const s = raw ? deserialize(raw) : null;
+  if (!s) return null;
+
+  // The cookie proves who signed in; the database decides what they may do
+  // *now*. A deactivated account is signed out on its next request, and a
+  // role or name change applies immediately — not after the cookie expires.
+  const { data, error } = await db()
+    .from("staff")
+    .select("name,role,is_active")
+    .eq("id", s.staffId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data || !data.is_active) return null;
+
+  return { ...s, name: data.name, role: data.role as Role };
 }
 
 export async function clearSession(): Promise<void> {
