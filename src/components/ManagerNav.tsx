@@ -2,7 +2,7 @@ import Link from "next/link";
 import { logoutAction } from "@/lib/actions";
 
 // شريط المدير | manager nav, phone-friendly.
-export default function ManagerNav({ current }: { current: "reports" | "inventory" }) {
+export default function ManagerNav({ current }: { current: "reports" | "products" | "inventory" }) {
   const tab = (href: string, label: string, key: string) => (
     <Link
       href={href}
@@ -16,7 +16,8 @@ export default function ManagerNav({ current }: { current: "reports" | "inventor
   return (
     <header className="sticky top-0 z-30 bg-cream/95 backdrop-blur border-b border-black/5 px-4 py-3 flex flex-wrap items-center gap-2">
       {tab("/reports", "التقارير", "reports")}
-      {tab("/inventory", "المخزون والأسعار", "inventory")}
+      {tab("/products", "الأصناف والأسعار", "products")}
+      {tab("/inventory", "المخزون", "inventory")}
       <Link href="/pos" className="btn px-4 py-2 text-sm bg-berry text-white">
         شاشة الكاشير
       </Link>

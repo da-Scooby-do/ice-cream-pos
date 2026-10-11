@@ -1,6 +1,7 @@
 // قراءات السيرفر | server-side reads, used by Server Components.
 import { db } from "./supabase";
 import type {
+  AdminExtra, AdminFlavor, AdminPackaging, AdminVariant,
   Extra, Flavor, LowStockRow, ShiftSummary, Staff, Variant,
 } from "./types";
 
@@ -136,13 +137,30 @@ export async function getInventory() {
   };
 }
 
-/** قائمة الأسعار | price list for the manager. */
-export async function getPriceList() {
-  const { data, error } = await db()
-    .from("product_variants")
-    .select("id,name_ar,kind,price,price_per_kg,sort_order")
-    .eq("is_active", true)
-    .order("sort_order");
-  if (error) throw new Error(error.message);
-  return data ?? [];
+/** كل الأصناف مع المخفية | the full catalog, hidden items included, for the manager. */
+export async function getCatalogAdmin() {
+  const client = db();
+  const [variants, flavors, extras, packaging] = await Promise.all([
+    client.from("product_variants")
+      .select("id,name_ar,kind,scoops,grams_per_scoop,price,price_per_kg,max_flavors,packaging_id,spoon_packaging_id,sort_order,is_active")
+      .order("sort_order"),
+    client.from("flavors")
+      .select("id,name_ar,color,stock_grams,low_stock_grams,sort_order,is_active")
+      .order("sort_order"),
+    client.from("extras")
+      .select("id,name_ar,price,stock_qty,low_stock_qty,sort_order,is_active")
+      .order("sort_order"),
+    client.from("packaging")
+      .select("id,name_ar,kind,stock_qty,low_stock_qty,sort_order,is_active")
+      .order("sort_order"),
+  ]);
+  for (const r of [variants, flavors, extras, packaging]) {
+    if (r.error) throw new Error(r.error.message);
+  }
+  return {
+    variants: (variants.data ?? []) as AdminVariant[],
+    flavors: (flavors.data ?? []) as AdminFlavor[],
+    extras: (extras.data ?? []) as AdminExtra[],
+    packaging: (packaging.data ?? []) as AdminPackaging[],
+  };
 }

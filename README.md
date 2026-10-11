@@ -21,7 +21,8 @@ An Arabic, right-to-left point-of-sale and inventory system for a single ice cre
 | **خصم المخزون تلقائياً** | Every sale deducts the cup/cone, the spoon, ~60 g per scoop of each flavor (or the exact weight), and each extra. |
 | **تنبيه النقص** | A red badge on the counter screen when any flavor, cup, or extra drops below its threshold. |
 | **تقفيل الوردية** | Count the drawer → see cash vs card, expected vs counted, **short / over** → prints the Z-report. |
-| **لوحة المدير** | Live shift totals, daily sales, top flavors, low stock, void orders, restock, edit prices — works on a phone. |
+| **لوحة المدير** | Live shift totals, daily sales, top flavors, low stock, void orders, restock — works on a phone. |
+| **إدارة الأصناف** | The manager adds and edits products (type, price, scoops, max flavors, which cup/cone/spoon it uses), flavors (name, button colour), extras, and cups/cones. Items are hidden rather than deleted, so old receipts stay intact. |
 
 ## الأمان | Security
 
@@ -52,7 +53,7 @@ Run these in the Supabase **SQL Editor**, in order:
 > insert into staff (name, pin_hash, role) values ('أحمد', crypt('2580', gen_salt('bf')), 'cashier');
 > ```
 
-The seeded **prices are placeholders** — set the real ones from **المخزون والأسعار** in the app.
+The seeded **prices are placeholders** — set the real ones from **الأصناف والأسعار** in the app.
 
 ### 2. متغيرات البيئة | Environment variables
 
@@ -120,7 +121,8 @@ src/
   app/pos         the counter screen (product → flavors → extras → pay)
   app/close       close shift + Z-report
   app/reports     manager dashboard
-  app/inventory   restock + prices
+  app/products    add / edit products, flavors, extras, packaging
+  app/inventory   restock
   lib/actions.ts  server actions (all mutations)
   lib/queries.ts  server reads
   lib/session.ts  signed PIN session

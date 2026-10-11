@@ -219,29 +219,235 @@ export async function restockAction(
 }
 
 // ---------------------------------------------------------------------
-// الأسعار | update a price (manager only)
+// إدارة الأصناف | add / edit products, flavors, extras, packaging.
+// Manager only. Nothing is ever hard-deleted: old orders reference these
+// rows, so "removing" an item hides it (is_active = false) instead.
 // ---------------------------------------------------------------------
-export async function updatePriceAction(
-  variantId: string,
-  price: number
-): Promise<ActionResult> {
+
+const KINDS = ["scoop", "cup", "weight", "cone"] as const;
+const PACK_KINDS = ["cup", "cone", "spoon", "biscuit", "bag"] as const;
+
+function cleanName(v: unknown): string {
+  const name = String(v ?? "").trim().replace(/\s+/g, " ");
+  if (!name) throw new Error("اكتب الاسم");
+  if (name.length > 40) throw new Error("الاسم طويل جداً (40 حرفاً كحد أقصى)");
+  return name;
+}
+
+function numberIn(v: unknown, label: string, min: number, max: number, int = false): number {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < min || n > max || (int && !Number.isInteger(n))) {
+    throw new Error(`${label} — أدخل رقماً ${int ? "صحيحاً " : ""}بين ${min} و ${max}`);
+  }
+  return n;
+}
+
+function optionalId(v: unknown): string | null {
+  const s = String(v ?? "").trim();
+  return s === "" ? null : s;
+}
+
+/** Postgres unique-violation → a message the manager can act on. */
+function dbError(e: { code?: string; message: string }): Error {
+  if (e.code === "23505") return new Error("هذا الاسم مستخدم من قبل");
+  return new Error(e.message);
+}
+
+function revalidateCatalog() {
+  revalidatePath("/products");
+  revalidatePath("/inventory");
+  revalidatePath("/pos");
+}
+
+/** رصيد البداية لصنف جديد يُسجَّل كحركة توريد | opening stock is logged as a restock. */
+async function logOpeningStock(
+  itemType: "flavor" | "packaging" | "extra",
+  id: string,
+  qty: number,
+  staffId: string
+) {
+  if (!qty) return;
+  const { error } = await db().from("inventory_movements").insert({
+    item_type: itemType,
+    flavor_id: itemType === "flavor" ? id : null,
+    packaging_id: itemType === "packaging" ? id : null,
+    extra_id: itemType === "extra" ? id : null,
+    qty_delta: qty,
+    unit: itemType === "flavor" ? "gram" : "piece",
+    reason: "restock",
+    staff_id: staffId,
+    note: "رصيد البداية",
+  });
+  if (error) throw dbError(error);
+}
+
+export type VariantInput = {
+  id?: string;
+  name_ar: string;
+  kind: (typeof KINDS)[number];
+  price?: number | null;
+  price_per_kg?: number | null;
+  scoops?: number | null;
+  grams_per_scoop?: number | null;
+  max_flavors: number;
+  packaging_id?: string | null;
+  spoon_packaging_id?: string | null;
+  sort_order?: number;
+  is_active: boolean;
+};
+
+export async function saveVariantAction(input: VariantInput): Promise<ActionResult> {
   try {
     await requireManager();
-    const p = Number(price);
-    if (!Number.isFinite(p) || p < 0) return { ok: false, error: "أدخل سعراً صحيحاً" };
+    if (!KINDS.includes(input.kind)) throw new Error("نوع الصنف غير صحيح");
+
+    const isWeight = input.kind === "weight";
+    const row = {
+      name_ar: cleanName(input.name_ar),
+      kind: input.kind,
+      // the price_present check needs exactly the right price column
+      price: isWeight ? null : numberIn(input.price, "السعر", 0, 100_000_000),
+      price_per_kg: isWeight ? numberIn(input.price_per_kg, "سعر الكيلو", 0, 100_000_000) : null,
+      scoops: isWeight ? null : numberIn(input.scoops, "عدد السكوبات", 1, 10, true),
+      grams_per_scoop: isWeight ? null : numberIn(input.grams_per_scoop, "جرام السكوب", 1, 500),
+      max_flavors: numberIn(input.max_flavors, "أقصى عدد نكهات", 1, 8, true),
+      packaging_id: optionalId(input.packaging_id),
+      spoon_packaging_id: optionalId(input.spoon_packaging_id),
+      sort_order: numberIn(input.sort_order ?? 0, "الترتيب", 0, 9999, true),
+      is_active: !!input.is_active,
+    };
 
     const client = db();
-    const { data: v, error } = await client
-      .from("product_variants").select("kind").eq("id", variantId).single();
-    if (error) throw new Error(error.message);
+    const { error } = input.id
+      ? await client.from("product_variants").update(row).eq("id", input.id)
+      : await client.from("product_variants").insert(row);
+    if (error) throw dbError(error);
 
-    const patch = v.kind === "weight" ? { price_per_kg: p } : { price: p };
-    const { error: upErr } = await client
-      .from("product_variants").update(patch).eq("id", variantId);
-    if (upErr) throw new Error(upErr.message);
+    revalidateCatalog();
+    return { ok: true, data: null };
+  } catch (e) {
+    return fail(e);
+  }
+}
 
-    revalidatePath("/inventory");
-    revalidatePath("/pos");
+export type FlavorInput = {
+  id?: string;
+  name_ar: string;
+  color: string;
+  low_stock_grams: number;
+  opening_stock_grams?: number;
+  sort_order?: number;
+  is_active: boolean;
+};
+
+export async function saveFlavorAction(input: FlavorInput): Promise<ActionResult> {
+  try {
+    const s = await requireManager();
+    if (!/^#[0-9a-fA-F]{6}$/.test(input.color)) throw new Error("اختر لوناً صحيحاً");
+
+    const row = {
+      name_ar: cleanName(input.name_ar),
+      color: input.color,
+      low_stock_grams: numberIn(input.low_stock_grams, "حد التنبيه", 0, 1_000_000),
+      sort_order: numberIn(input.sort_order ?? 0, "الترتيب", 0, 9999, true),
+      is_active: !!input.is_active,
+    };
+
+    const client = db();
+    if (input.id) {
+      const { error } = await client.from("flavors").update(row).eq("id", input.id);
+      if (error) throw dbError(error);
+    } else {
+      const opening = numberIn(input.opening_stock_grams ?? 0, "الرصيد", 0, 10_000_000);
+      const { data, error } = await client
+        .from("flavors").insert({ ...row, stock_grams: opening }).select("id").single();
+      if (error) throw dbError(error);
+      await logOpeningStock("flavor", data.id, opening, s.staffId);
+    }
+
+    revalidateCatalog();
+    return { ok: true, data: null };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export type ExtraInput = {
+  id?: string;
+  name_ar: string;
+  price: number;
+  low_stock_qty: number;
+  opening_stock?: number;
+  sort_order?: number;
+  is_active: boolean;
+};
+
+export async function saveExtraAction(input: ExtraInput): Promise<ActionResult> {
+  try {
+    const s = await requireManager();
+    const row = {
+      name_ar: cleanName(input.name_ar),
+      price: numberIn(input.price, "السعر", 0, 100_000_000),
+      low_stock_qty: numberIn(input.low_stock_qty, "حد التنبيه", 0, 1_000_000),
+      sort_order: numberIn(input.sort_order ?? 0, "الترتيب", 0, 9999, true),
+      is_active: !!input.is_active,
+    };
+
+    const client = db();
+    if (input.id) {
+      const { error } = await client.from("extras").update(row).eq("id", input.id);
+      if (error) throw dbError(error);
+    } else {
+      const opening = numberIn(input.opening_stock ?? 0, "الرصيد", 0, 10_000_000);
+      const { data, error } = await client
+        .from("extras").insert({ ...row, stock_qty: opening }).select("id").single();
+      if (error) throw dbError(error);
+      await logOpeningStock("extra", data.id, opening, s.staffId);
+    }
+
+    revalidateCatalog();
+    return { ok: true, data: null };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export type PackagingInput = {
+  id?: string;
+  name_ar: string;
+  kind: (typeof PACK_KINDS)[number];
+  low_stock_qty: number;
+  opening_stock?: number;
+  sort_order?: number;
+  is_active: boolean;
+};
+
+export async function savePackagingAction(input: PackagingInput): Promise<ActionResult> {
+  try {
+    const s = await requireManager();
+    if (!PACK_KINDS.includes(input.kind)) throw new Error("نوع التعبئة غير صحيح");
+
+    const row = {
+      name_ar: cleanName(input.name_ar),
+      kind: input.kind,
+      low_stock_qty: numberIn(input.low_stock_qty, "حد التنبيه", 0, 1_000_000),
+      sort_order: numberIn(input.sort_order ?? 0, "الترتيب", 0, 9999, true),
+      is_active: !!input.is_active,
+    };
+
+    const client = db();
+    if (input.id) {
+      const { error } = await client.from("packaging").update(row).eq("id", input.id);
+      if (error) throw dbError(error);
+    } else {
+      const opening = numberIn(input.opening_stock ?? 0, "الرصيد", 0, 10_000_000, true);
+      const { data, error } = await client
+        .from("packaging").insert({ ...row, stock_qty: opening }).select("id").single();
+      if (error) throw dbError(error);
+      await logOpeningStock("packaging", data.id, opening, s.staffId);
+    }
+
+    revalidateCatalog();
     return { ok: true, data: null };
   } catch (e) {
     return fail(e);

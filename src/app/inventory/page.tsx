@@ -1,18 +1,18 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
-import { getInventory, getPriceList } from "@/lib/queries";
+import { getInventory } from "@/lib/queries";
 import ManagerNav from "@/components/ManagerNav";
-import { RestockRow, PriceRow } from "./Rows";
+import { RestockRow } from "./Rows";
 
 export const dynamic = "force-dynamic";
 
-// المخزون والأسعار | stock + prices, manager only.
+// المخزون | stock levels + restocking, manager only. Prices live in /products.
 export default async function InventoryPage() {
   const session = await getSession();
   if (!session) redirect("/login");
   if (session.role !== "manager") redirect("/pos");
 
-  const [inv, prices] = await Promise.all([getInventory(), getPriceList()]);
+  const inv = await getInventory();
 
   return (
     <>
@@ -25,13 +25,6 @@ export default async function InventoryPage() {
           ))}
         </Section>
 
-        <Section title="الأسعار" hint="بالجنيه السوداني. صنف «بالوزن» سعره للكيلو.">
-          {prices.map((p) => (
-            <PriceRow key={p.id} id={p.id} name={p.name_ar}
-              price={Number(p.kind === "weight" ? p.price_per_kg : p.price)}
-              perKg={p.kind === "weight"} />
-          ))}
-        </Section>
 
         <Section title="الأكواب والكون والتعبئة" hint="بالحبة.">
           {inv.packaging.map((p) => (

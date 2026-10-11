@@ -89,3 +89,26 @@ export type Receipt = {
   payment_method?: PaymentMethod;
   created_at?: string;
 };
+
+// ---- إدارة الأصناف | manager catalog rows ----
+export type AdminVariant = Variant & {
+  packaging_id: string | null;
+  spoon_packaging_id: string | null;
+  is_active: boolean;
+};
+
+export type AdminFlavor = Flavor & { sort_order: number; is_active: boolean };
+
+export type AdminExtra = Extra & { sort_order: number; is_active: boolean };
+
+export type PackagingKind = "cup" | "cone" | "spoon" | "biscuit" | "bag";
+
+export type AdminPackaging = {
+  id: string;
+  name_ar: string;
+  kind: PackagingKind;
+  stock_qty: number;
+  low_stock_qty: number;
+  sort_order: number;
+  is_active: boolean;
+};
