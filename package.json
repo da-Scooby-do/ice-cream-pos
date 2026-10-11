@@ -2,7 +2,7 @@
   "name": "ice-cream-pos",
   "version": "1.0.0",
   "private": true,
-  "description": "نظام كاشير ومخزون لمحل آيس كريم — Arabic RTL POS for an ice cream shop",
+  "description": "\u0646\u0638\u0627\u0645 \u0643\u0627\u0634\u064a\u0631 \u0648\u0645\u062e\u0632\u0648\u0646 \u0644\u0645\u062d\u0644 \u0622\u064a\u0633 \u0643\u0631\u064a\u0645 \u2014 Arabic RTL POS for an ice cream shop",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -12,9 +12,9 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "2.117.2",
-    "next": "15.5.4",
-    "react": "19.1.0",
-    "react-dom": "19.1.0",
+    "next": "15.5.27",
+    "react": "19.1.9",
+    "react-dom": "19.1.9",
     "zustand": "5.0.2"
   },
   "devDependencies": {
@@ -24,9 +24,12 @@
     "@types/react-dom": "19.0.2",
     "autoprefixer": "10.4.20",
     "eslint": "9.17.0",
-    "eslint-config-next": "15.5.4",
-    "postcss": "8.4.49",
+    "eslint-config-next": "15.5.27",
+    "postcss": "8.5.29",
     "tailwindcss": "3.4.17",
     "typescript": "5.7.2"
+  },
+  "overrides": {
+    "postcss": "8.5.29"
   }
 }
