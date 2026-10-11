@@ -1,0 +1,122 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-arabic: "Cairo", Tahoma, Arial, sans-serif;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: #FFF9F0;
+  color: #2A1F18;
+  font-family: var(--font-arabic);
+  /* لا تحديد نص بالخطأ على شاشة اللمس | no accidental text selection */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* الأرقام دائماً بالإنجليزية وبعرض ثابت | tabular Latin digits for money */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* أزرار كبيرة للكاشير | big counter buttons */
+.btn {
+  @apply rounded-2xl font-bold transition active:scale-[0.97] disabled:opacity-40 disabled:active:scale-100;
+}
+
+.btn-lg {
+  @apply btn text-xl px-6 py-5 shadow-sm;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* =====================================================================
+   طباعة فاتورة 80 ملم | 80mm thermal receipt printing
+   Designed for the Xprinter 80mm over USB with Chrome launched as:
+     chrome --kiosk-printing --app=http://localhost:3000/pos
+   kiosk-printing fires window.print() straight to the default printer
+   with no dialog, so the slip appears the moment the sale is confirmed.
+   ===================================================================== */
+@media screen {
+  .receipt-sheet {
+    display: none;
+  }
+}
+
+@media print {
+  @page {
+    size: 80mm auto;
+    margin: 0;
+  }
+
+  html,
+  body {
+    width: 80mm;
+    background: #fff;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* اطبع الفاتورة فقط | hide the app, print only the slip */
+  body > *:not(.receipt-sheet) {
+    display: none !important;
+  }
+
+  .receipt-sheet {
+    display: block !important;
+    width: 80mm;
+    padding: 2mm 3mm 6mm;
+    color: #000;
+    font-family: var(--font-arabic);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .receipt-sheet .r-title {
+    font-size: 17px;
+    font-weight: 800;
+    text-align: center;
+  }
+
+  .receipt-sheet .r-sub {
+    text-align: center;
+    font-size: 11px;
+  }
+
+  .receipt-sheet .r-rule {
+    border-top: 1px dashed #000;
+    margin: 2mm 0;
+  }
+
+  .receipt-sheet .r-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 2mm;
+  }
+
+  .receipt-sheet .r-total {
+    font-size: 15px;
+    font-weight: 800;
+  }
+
+  .receipt-sheet .r-meta {
+    font-size: 10px;
+  }
+
+  .receipt-sheet .r-center {
+    text-align: center;
+  }
+}
