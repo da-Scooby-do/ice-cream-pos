@@ -9,7 +9,7 @@ create or replace function verify_staff_pin(p_staff_id uuid, p_pin text)
 returns boolean
 language sql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
   select exists (
     select 1 from staff
@@ -24,7 +24,7 @@ create or replace function set_staff_pin(p_staff_id uuid, p_pin text)
 returns void
 language sql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
   update staff set pin_hash = crypt(p_pin, gen_salt('bf')) where id = p_staff_id;
 $$;
@@ -36,7 +36,7 @@ create or replace function open_shift(p_staff_id uuid, p_opening_cash numeric)
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare v_id uuid;
 begin
@@ -74,7 +74,7 @@ create or replace function create_order(
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   v_shift_id      uuid;
@@ -281,7 +281,7 @@ create or replace function void_order(p_order_id uuid, p_staff_id uuid, p_reason
 returns void
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare r record;
 begin
@@ -319,7 +319,7 @@ create or replace function shift_summary(p_shift_id uuid)
 returns jsonb
 language sql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
   with s as (select * from shifts where id = p_shift_id),
   o as (
@@ -368,7 +368,7 @@ create or replace function close_shift(p_shift_id uuid, p_counted_cash numeric, 
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 begin
   if not exists (select 1 from shifts where id = p_shift_id and status = 'open') then
@@ -452,3 +452,13 @@ revoke all on function shift_summary(uuid)                  from public, anon, a
 alter view v_low_stock   set (security_invoker = true);
 alter view v_daily_sales set (security_invoker = true);
 revoke all on v_low_stock, v_daily_sales from anon, authenticated;
+
+-- the Next.js server (service_role) is the only caller
+grant execute on function create_order(uuid, text, jsonb, numeric, numeric) to service_role;
+grant execute on function open_shift(uuid, numeric)        to service_role;
+grant execute on function close_shift(uuid, numeric, text) to service_role;
+grant execute on function void_order(uuid, uuid, text)     to service_role;
+grant execute on function verify_staff_pin(uuid, text)     to service_role;
+grant execute on function set_staff_pin(uuid, text)        to service_role;
+grant execute on function shift_summary(uuid)              to service_role;
+grant select on v_low_stock, v_daily_sales                 to service_role;

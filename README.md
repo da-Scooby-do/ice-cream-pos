@@ -59,7 +59,7 @@ Copy `.env.example` to `.env.local` (and add the same three in Vercel → Settin
 | Variable | Where to find it |
 |---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase → Project Settings → API |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API → `service_role` (**secret**) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API Keys → **Secret key** (`sb_secret_…`) — never share it |
 | `SESSION_SECRET` | any long random string: `openssl rand -base64 32` |
 
 ### 3. التشغيل محلياً | Run locally
