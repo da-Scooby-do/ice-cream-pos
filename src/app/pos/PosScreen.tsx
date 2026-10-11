@@ -21,6 +21,13 @@ const KIND_LABEL: Record<VariantKind, string> = {
 
 const KIND_ORDER: VariantKind[] = ["scoop", "cup", "weight", "cone"];
 
+const KIND_ACCENT: Record<VariantKind, string> = {
+  scoop: "border-s-berry",
+  cup: "border-s-mint",
+  weight: "border-s-amber-500",
+  cone: "border-s-choco",
+};
+
 type Settings = {
   shop_name: string;
   phone: string | null;
@@ -104,9 +111,9 @@ export default function PosScreen({
 
   return (
     <>
-      <div className="min-h-dvh flex flex-col">
+      <div className="min-h-dvh lg:h-dvh lg:overflow-hidden flex flex-col">
         {/* ============ الشريط العلوي | top bar ============ */}
-        <header className="flex items-center gap-3 px-4 py-2.5 bg-white border-b border-black/5">
+        <header className="flex flex-wrap items-center gap-2 sm:gap-3 px-4 py-2.5 bg-white border-b border-black/5">
           <h1 className="font-extrabold text-choco text-lg">{settings.shop_name}</h1>
 
           <span className="text-xs text-choco/50">الكاشير: {cashier}</span>
@@ -140,34 +147,24 @@ export default function PosScreen({
         {/* ============ المساحة الرئيسية | main area ============ */}
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-3 p-3 min-h-0">
           {/* ---- الأصناف والنكهات | products + flavors ---- */}
-          <section className="space-y-3 overflow-auto">
-            {/* الأصناف | product buttons */}
-            {KIND_ORDER.map((kind) => {
-              const group = variants.filter((v) => v.kind === kind);
-              if (!group.length) return null;
-              return (
-                <div key={kind}>
-                  <h2 className="text-xs font-bold text-choco/40 mb-1.5">{KIND_LABEL[kind]}</h2>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2">
-                    {group.map((v) => (
-                      <button
-                        key={v.id}
-                        type="button"
-                        onClick={() => cart.startLine(v)}
-                        className="btn px-3 py-4 bg-white border-2 border-black/5 text-choco text-start hover:border-berry/40 hover:bg-berry/5"
-                      >
-                        <span className="block font-bold text-base leading-tight">{v.name_ar}</span>
-                        <span className="block text-sm text-berry font-bold tnum mt-0.5">
-                          {v.kind === "weight"
-                            ? `${money(v.price_per_kg)} / كجم`
-                            : money(v.price)}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
+          <section className="space-y-3 lg:overflow-auto min-h-0 lg:pe-1">
+            {/* الأصناف | product buttons — one compact grid, colour-coded by kind */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2">
+              {KIND_ORDER.flatMap((kind) => variants.filter((v) => v.kind === kind)).map((v) => (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => cart.startLine(v)}
+                  className={`btn px-3 py-2.5 bg-white border-2 border-black/5 border-s-[6px] ${KIND_ACCENT[v.kind]} text-choco text-start hover:bg-berry/5`}
+                >
+                  <span className="block text-[10px] font-bold text-choco/40 leading-none mb-1">{KIND_LABEL[v.kind]}</span>
+                  <span className="block font-bold text-base leading-tight">{v.name_ar}</span>
+                  <span className="block text-sm text-berry font-bold tnum mt-0.5">
+                    {v.kind === "weight" ? `${money(v.price_per_kg)} / كجم` : money(v.price)}
+                  </span>
+                </button>
+              ))}
+            </div>
 
             {/* النكهات | flavors */}
             <div>
@@ -198,7 +195,7 @@ export default function PosScreen({
                       type="button"
                       disabled={blocked}
                       onClick={() => cart.toggleFlavor(f)}
-                      className={`btn relative px-2 py-4 text-sm border-2 ${
+                      className={`btn relative px-2 py-3.5 text-sm border-2 ${
                         picked
                           ? "border-berry bg-berry text-white"
                           : "border-black/5 bg-white text-choco"
@@ -471,59 +468,56 @@ function PayDialog({
   const change = Math.round((paidNum - total) * 100) / 100;
 
   return (
-    <Modal title="الدفع" onClose={onCancel}>
-      <div className="rounded-2xl bg-cream border-2 border-black/10 p-4 text-center">
-        <p className="text-xs font-bold text-choco/50">المطلوب</p>
-        <p className="text-4xl font-extrabold text-berry tnum">{money(total)}</p>
-      </div>
+    <Modal title="الدفع" onClose={onCancel} wide>
+      <div className="grid md:grid-cols-2 gap-4">
+        {/* المبلغ والدفع السريع | amount + one-tap payments */}
+        <div className="space-y-3">
+          <div className="rounded-2xl bg-cream border-2 border-black/10 p-4 text-center">
+            <p className="text-xs font-bold text-choco/50">المطلوب</p>
+            <p className="text-4xl font-extrabold text-berry tnum">{money(total)}</p>
+          </div>
 
-      {/* نقدي سريع — المبلغ بالضبط | exact cash, one click */}
-      <button
-        type="button"
-        disabled={pending}
-        onClick={() => onPay("cash", total)}
-        className="btn w-full py-5 text-xl bg-mint text-white"
-      >
-        نقدي — المبلغ بالضبط ⏎
-      </button>
-
-      <div className="grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          disabled={pending}
-          onClick={() => onPay("card", null)}
-          className="btn py-4 text-base bg-choco text-white"
-        >
-          بطاقة
-        </button>
-        <button
-          type="button"
-          disabled={pending}
-          onClick={() => onPay("wallet", null)}
-          className="btn py-4 text-base bg-choco/80 text-white"
-        >
-          محفظة
-        </button>
-      </div>
-
-      <div className="border-t border-black/5 pt-3 space-y-2">
-        <p className="text-xs font-bold text-choco/50">
-          أو أدخل المبلغ المستلم لحساب الباقي
-        </p>
-        <div className="h-14 rounded-2xl bg-cream border-2 border-black/10 grid place-items-center text-2xl font-extrabold text-choco tnum">
-          {money(paidNum)}
-        </div>
-        {paidNum > 0 && (
-          <p
-            className={`text-center font-bold tnum ${
-              change < 0 ? "text-red-600" : "text-mint"
-            }`}
+          {/* نقدي سريع — المبلغ بالضبط | exact cash, one click */}
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => onPay("cash", total)}
+            className="btn w-full py-5 text-xl bg-mint text-white"
           >
-            {change < 0
-              ? `ناقص ${money(Math.abs(change))}`
-              : `الباقي ${money(change)}`}
-          </p>
-        )}
+            نقدي — المبلغ بالضبط ⏎
+          </button>
+
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => onPay("card", null)}
+              className="btn py-4 text-base bg-choco text-white"
+            >
+              بطاقة
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => onPay("wallet", null)}
+              className="btn py-4 text-base bg-choco/80 text-white"
+            >
+              محفظة
+            </button>
+          </div>
+
+          <div className="rounded-2xl border-2 border-dashed border-black/10 p-3 space-y-1">
+            <p className="text-xs font-bold text-choco/50">المبلغ المستلم</p>
+            <p className="text-2xl font-extrabold text-choco tnum">{money(paidNum)}</p>
+            {paidNum > 0 && (
+              <p className={`font-bold tnum ${change < 0 ? "text-red-600" : "text-mint"}`}>
+                {change < 0 ? `ناقص ${money(Math.abs(change))}` : `الباقي ${money(change)}`}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* لوحة الأرقام لحساب الباقي | keypad for change */}
         <Keypad
           value={paid}
           onChange={setPaid}
@@ -542,11 +536,12 @@ function PayDialog({
 
 // ---------------------------------------------------------------------
 function Modal({
-  title, children, onClose,
+  title, children, onClose, wide,
 }: {
   title: string;
   children: React.ReactNode;
   onClose: () => void;
+  wide?: boolean;
 }) {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -558,7 +553,7 @@ function Modal({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 grid place-items-center p-4">
-      <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl p-5 space-y-4 max-h-[95dvh] overflow-auto">
+      <div className={`w-full ${wide ? "max-w-3xl" : "max-w-sm"} bg-white rounded-3xl shadow-2xl p-5 space-y-4 max-h-[95dvh] overflow-auto`}>
         <div className="flex items-center justify-between">
           <h3 className="font-extrabold text-choco text-lg">{title}</h3>
           <button

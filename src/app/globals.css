@@ -27,7 +27,7 @@ body {
 
 /* أزرار كبيرة للكاشير | big counter buttons */
 .btn {
-  @apply rounded-2xl font-bold transition active:scale-[0.97] disabled:opacity-40 disabled:active:scale-100;
+  @apply rounded-2xl font-bold transition-transform active:scale-[0.97] disabled:opacity-40 disabled:active:scale-100;
 }
 
 .btn-lg {
