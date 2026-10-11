@@ -6,6 +6,8 @@
 An Arabic, right-to-left point-of-sale and inventory system for a single ice cream shop.
 **Next.js 15 · Tailwind · Zustand · Supabase (Postgres) · Vercel.**
 
+🌐 **Live:** https://ice-cream-pos.vercel.app
+
 ---
 
 ## ما يفعله النظام | What it does
@@ -79,10 +81,10 @@ npm run dev     # http://localhost:3000
 2. In the driver's printing preferences, set the paper to **80mm × receipt (continuous)**.
 3. Launch Chrome in kiosk-printing mode — `window.print()` then goes straight to the printer with **no dialog**:
 
-**Windows** — double-click `scripts/start-pos.bat` (edit the URL inside it first), or make a desktop shortcut with this target:
+**Windows** — double-click `scripts/start-pos.bat` (it already points at the live app), or make a desktop shortcut with this target:
 
 ```
-"C:\Program Files\Google\Chrome\Application\chrome.exe" --kiosk-printing --app=https://YOUR-APP.vercel.app
+"C:\Program Files\Google\Chrome\Application\chrome.exe" --kiosk-printing --app=https://ice-cream-pos.vercel.app
 ```
 
 **Linux** — `scripts/start-pos.sh`.

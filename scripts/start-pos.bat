@@ -2,10 +2,10 @@
 REM ======================================================================
 REM  تشغيل الكاشير | Launch the POS with silent receipt printing.
 REM  1) Set the Xprinter as the DEFAULT printer.
-REM  2) Edit POS_URL below to the deployed address.
+REM  2) POS_URL below is the live app.
 REM  3) Close ALL Chrome windows, then run this file.
 REM ======================================================================
-set POS_URL=https://YOUR-APP.vercel.app
+set POS_URL=https://ice-cream-pos.vercel.app
 
 set CHROME="C:\Program Files\Google\Chrome\Application\chrome.exe"
 if not exist %CHROME% set CHROME="C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
