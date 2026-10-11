@@ -54,13 +54,13 @@ The seeded **prices are placeholders** — set the real ones from **المخزو
 
 ### 2. متغيرات البيئة | Environment variables
 
-Copy `.env.example` to `.env.local` (and add the same three in Vercel → Settings → Environment Variables):
+Copy `.env.example` to `.env.local` (and add them in Vercel → Settings → Environment Variables):
 
 | Variable | Where to find it |
 |---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase → Project Settings → API |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API Keys → **Secret key** (`sb_secret_…`) — never share it |
-| `SESSION_SECRET` | any long random string: `openssl rand -base64 32` |
+| `SESSION_SECRET` | *optional* — if unset, derived from the Supabase secret key. Set it (`openssl rand -base64 32`) only if you want sessions independent of that key. |
 
 ### 3. التشغيل محلياً | Run locally
 
