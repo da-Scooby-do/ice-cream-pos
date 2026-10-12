@@ -14,7 +14,7 @@ An Arabic, right-to-left point-of-sale and inventory system for a single ice cre
 
 | | |
 |---|---|
-| **دخول بالرقم السري** | Each cashier taps their name and a 4–6 digit PIN. |
+| **دخول بالرقم السري** | Staff type only their 4–6 digit PIN — no names are shown on the login screen; the PIN identifies the person, so every PIN must be unique. After 8 wrong PINs from one device the login locks for 10 minutes. |
 | **فتح الوردية** | Enter the opening cash in the drawer. Only one shift can be open at a time. |
 | **البيع** | Product → flavors → extras (optional) → **Enter, Enter** → receipt prints. |
 | **أنواع الأصناف** | By scoop (1/2/3) · fixed cups (S/M/L) · by weight (g/kg) · cone/biscuit. |
@@ -45,10 +45,11 @@ Run these in the Supabase **SQL Editor**, in order:
 1. `supabase/migrations/0001_init.sql` — tables
 2. `supabase/migrations/0002_functions.sql` — sales logic, shift close, reports, security
 3. `supabase/migrations/0003_staff_admin.sql` and `0004_staff_archive.sql` — staff management
-4. *(optional)* `0005_staff_name_reuse.sql` — lets a deleted person's name be reused
-5. `supabase/seed.sql` — starting flavors, cups, extras, prices, and two users
+4. `0006_pin_only_login.sql` — PIN-only login, unique PINs, wrong-guess lockout
+5. *(optional)* `0005_staff_name_reuse.sql` — lets a deleted person's name be reused
+6. `supabase/seed.sql` — starting flavors, cups, extras, prices, and two users
 
-> ⚠️ **غيّر الأرقام السرية فوراً.** The seed creates `المدير` (PIN **1234**) and `كاشير 1` (PIN **1111**). Change them:
+> ⚠️ **غيّر الأرقام السرية فوراً.** The seed creates `المدير` (PIN **1234**) and `كاشير 1` (PIN **1111**). With PIN-only login anyone who knows these defaults can sign in, so change them first. From SQL:
 > ```sql
 > select set_staff_pin((select id from staff where name = 'المدير'), '8642');
 > ```

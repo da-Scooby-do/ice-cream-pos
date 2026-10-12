@@ -24,7 +24,7 @@ export default function StaffManager({ staff, meId }: { staff: AdminStaff[]; meI
       <div className="flex items-center justify-between gap-2">
         <div>
           <h1 className="text-xl font-extrabold text-choco">الموظفون</h1>
-          <p className="text-xs text-choco/50">كل موظف يدخل باسمه ورقمه السري، وتُسجَّل الورديات والفواتير باسمه.</p>
+          <p className="text-xs text-choco/50">كل موظف يدخل برقمه السري فقط، وتُسجَّل الورديات والفواتير باسمه.</p>
         </div>
         <button
           type="button"
@@ -127,7 +127,7 @@ function StaffForm({ row, isMe, onClose }: { row: AdminStaff | null; isMe: boole
 
       <Field
         label={row ? "رقم سري جديد" : "الرقم السري"}
-        hint={row ? "اتركه فارغاً للإبقاء على الرقم الحالي — من 4 إلى 6 أرقام" : "من 4 إلى 6 أرقام"}
+        hint={row ? "اتركه فارغاً للإبقاء على الرقم الحالي — من 4 إلى 6 أرقام، ومختلف عن كل الموظفين" : "من 4 إلى 6 أرقام، ومختلف عن كل الموظفين — به يُعرف الموظف عند الدخول"}
       >
         <input
           type="password"

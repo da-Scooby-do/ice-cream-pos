@@ -3,6 +3,7 @@
 // الأوامر | mutations. Every one of these runs on the server, re-checks
 // the session, and lets Postgres do the pricing + stock maths.
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "./supabase";
 import {
@@ -23,25 +24,23 @@ function fail(e: unknown): { ok: false; error: string } {
 // ---------------------------------------------------------------------
 // تسجيل الدخول | PIN login
 // ---------------------------------------------------------------------
-export async function loginAction(
-  staffId: string,
-  pin: string
-): Promise<ActionResult> {
+export async function loginAction(pin: string): Promise<ActionResult> {
   try {
-    if (!staffId) return { ok: false, error: "اختر الموظف" };
     if (!/^\d{4,6}$/.test(pin)) return { ok: false, error: "الرقم السري من 4 إلى 6 أرقام" };
 
-    const client = db();
-    const { data: valid, error } = await client.rpc("verify_staff_pin", {
-      p_staff_id: staffId,
-      p_pin: pin,
-    });
-    if (error) throw new Error(error.message);
-    if (!valid) return { ok: false, error: "الرقم السري غير صحيح" };
+    // The PIN alone identifies the person, so wrong guesses are throttled
+    // per device in the database (8 failures per 10 minutes).
+    const h = await headers();
+    const ip =
+      h.get("x-real-ip") ??
+      h.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      "unknown";
 
-    const { data: staff, error: e2 } = await client
-      .from("staff").select("id,name,role").eq("id", staffId).single();
-    if (e2) throw new Error(e2.message);
+    const { data, error } = await db().rpc("login_with_pin", { p_pin: pin, p_ip: ip });
+    if (error) throw new Error(error.message);
+
+    const staff = (data as { id: string; name: string; role: "cashier" | "manager" }[] | null)?.[0];
+    if (!staff) return { ok: false, error: "الرقم السري غير صحيح" };
 
     await setSession({ staffId: staff.id, name: staff.name, role: staff.role });
     return { ok: true, data: null };

@@ -3,7 +3,7 @@
 // لوحة أرقام كبيرة | a big numeric keypad.
 // Works with a mouse, a touchscreen, or the ThinkPad's number row —
 // physical keys are bound too so a fast cashier never needs the mouse.
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 
 export default function Keypad({
   value,
@@ -22,15 +22,28 @@ export default function Keypad({
   enterLabel?: string;
   enterDisabled?: boolean;
 }) {
+  // The latest value, updated on every key — not only when React
+  // re-renders — so fast typing (or a fast cashier) never drops a digit.
+  const latest = useRef(value);
+  useLayoutEffect(() => {
+    latest.current = value;
+  }, [value]);
+
+  function emit(next: string) {
+    latest.current = next;
+    onChange(next);
+  }
+
   function push(ch: string) {
-    if (ch === "." ) {
-      if (!allowDecimal || value.includes(".")) return;
-      onChange((value || "0") + ".");
+    const cur = latest.current;
+    if (ch === ".") {
+      if (!allowDecimal || cur.includes(".")) return;
+      emit((cur || "0") + ".");
       return;
     }
-    if (value.length >= maxLength) return;
+    if (cur.length >= maxLength) return;
     // no leading zeros
-    onChange(value === "0" ? ch : value + ch);
+    emit(cur === "0" ? ch : cur + ch);
   }
 
   // اختصارات الكيبورد | physical keyboard shortcuts
@@ -41,10 +54,10 @@ export default function Keypad({
         push(e.key);
       } else if (e.key === "Backspace") {
         e.preventDefault();
-        onChange(value.slice(0, -1));
+        emit(latest.current.slice(0, -1));
       } else if (e.key === "Escape") {
         e.preventDefault();
-        onChange("");
+        emit("");
       } else if (e.key === "." || e.key === ",") {
         e.preventDefault();
         push(".");
@@ -74,7 +87,7 @@ export default function Keypad({
 
       <button
         type="button"
-        onClick={() => onChange(value.slice(0, -1))}
+        onClick={() => emit(latest.current.slice(0, -1))}
         className="btn py-5 text-xl bg-amber-50 border-2 border-amber-200 text-amber-700"
         aria-label="حذف"
       >
@@ -100,7 +113,7 @@ export default function Keypad({
       ) : (
         <button
           type="button"
-          onClick={() => onChange("")}
+          onClick={() => emit("")}
           className="btn py-5 text-base bg-cream border-2 border-black/10 text-choco/60"
         >
           مسح

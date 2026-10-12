@@ -2,20 +2,8 @@
 import { db } from "./supabase";
 import type {
   AdminExtra, AdminFlavor, AdminPackaging, AdminStaff, AdminVariant,
-  Extra, Flavor, LowStockRow, ShiftSummary, Staff, Variant,
+  Extra, Flavor, LowStockRow, ShiftSummary, Variant,
 } from "./types";
-
-export async function getStaff(): Promise<Staff[]> {
-  const { data, error } = await db()
-    .from("staff")
-    .select("id,name,role")
-    .eq("is_active", true)
-    .is("deleted_at", null)
-    .order("role", { ascending: true })
-    .order("name", { ascending: true });
-  if (error) throw new Error(error.message);
-  return (data ?? []) as Staff[];
-}
 
 export async function getSettings() {
   const { data, error } = await db()
