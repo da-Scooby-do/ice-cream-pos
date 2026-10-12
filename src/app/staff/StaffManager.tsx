@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { deleteStaffAction, saveStaffAction } from "@/lib/actions";
 import type { AdminStaff, Role } from "@/lib/types";
 import { Field, FormShell, inputCls, useSave } from "@/components/form";
+import Modal from "@/components/Modal";
 
 const ROLE_LABEL: Record<Role, string> = { cashier: "كاشير", manager: "مدير" };
 
@@ -18,6 +19,7 @@ function lastShift(ts: string | null) {
 
 export default function StaffManager({ staff, meId }: { staff: AdminStaff[]; meId: string }) {
   const [editing, setEditing] = useState<AdminStaff | "new" | null>(null);
+  const [removing, setRemoving] = useState<AdminStaff | null>(null);
 
   return (
     <div className="space-y-4">
@@ -61,6 +63,15 @@ export default function StaffManager({ staff, meId }: { staff: AdminStaff[]; meI
                 </p>
                 <p className="text-xs text-choco/50 tnum truncate">{lastShift(m.last_shift_at)}</p>
               </div>
+              {m.id !== meId && (
+                <button
+                  type="button"
+                  onClick={() => setRemoving(m)}
+                  className="btn px-3 py-2 text-sm bg-red-50 text-red-600 border border-red-100"
+                >
+                  حذف
+                </button>
+              )}
               <button type="button" onClick={() => setEditing(m)} className="btn px-4 py-2 text-sm bg-choco text-white">
                 تعديل
               </button>
@@ -73,6 +84,12 @@ export default function StaffManager({ staff, meId }: { staff: AdminStaff[]; meI
         الموظف الموقوف لا يظهر في شاشة الدخول ويُسجَّل خروجه فوراً — يمكن إعادة تفعيله لاحقاً.
         الحذف يزيله من القائمة نهائياً. في الحالتين تبقى فواتيره القديمة محفوظة باسمه.
       </p>
+
+      {removing && (
+        <Modal title={`حذف ${removing.name}`} onClose={() => setRemoving(null)}>
+          <DeleteStaff id={removing.id} name={removing.name} onDone={() => setRemoving(null)} startConfirmed />
+        </Modal>
+      )}
 
       {editing && (
         <StaffForm
@@ -161,8 +178,15 @@ function StaffForm({ row, isMe, onClose }: { row: AdminStaff | null; isMe: boole
 // ---------------------------------------------------------------------
 // حذف الموظف — بخطوتين للتأكيد | remove, with a confirm step
 // ---------------------------------------------------------------------
-function DeleteStaff({ id, name, onDone }: { id: string; name: string; onDone: () => void }) {
-  const [confirming, setConfirming] = useState(false);
+function DeleteStaff({
+  id, name, onDone, startConfirmed = false,
+}: {
+  id: string;
+  name: string;
+  onDone: () => void;
+  startConfirmed?: boolean;
+}) {
+  const [confirming, setConfirming] = useState(startConfirmed);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -173,7 +197,7 @@ function DeleteStaff({ id, name, onDone }: { id: string; name: string; onDone: (
       if (res.ok) onDone();
       else {
         setError(res.error);
-        setConfirming(false);
+        if (!startConfirmed) setConfirming(false);
       }
     });
   }
@@ -196,7 +220,7 @@ function DeleteStaff({ id, name, onDone }: { id: string; name: string; onDone: (
           <div className="grid grid-cols-3 gap-2">
             <button
               type="button"
-              onClick={() => setConfirming(false)}
+              onClick={() => (startConfirmed ? onDone() : setConfirming(false))}
               className="btn py-2.5 text-sm bg-white text-choco border border-black/10"
             >
               تراجع

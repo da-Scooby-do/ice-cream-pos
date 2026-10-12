@@ -167,51 +167,36 @@ export async function voidOrderAction(
 }
 
 // ---------------------------------------------------------------------
-// المخزون | restock. Adds stock and writes an audit row.
+// المخزون | change stock. 'add' = delivery (or waste, if negative);
+// 'set' = the exact amount after a stock count. Done in one locked
+// database step so a sale at the same moment is never lost.
 // ---------------------------------------------------------------------
-export async function restockAction(
+export async function adjustStockAction(
   itemType: "flavor" | "packaging" | "extra",
   itemId: string,
-  qty: number,
-  note?: string
-): Promise<ActionResult> {
+  mode: "add" | "set",
+  amount: number
+): Promise<ActionResult<number>> {
   try {
     const s = await requireManager();
-    const amount = Number(qty);
-    if (!Number.isFinite(amount) || amount === 0) {
+    const n = Number(amount);
+    if (!Number.isFinite(n) || (mode === "add" && n === 0)) {
       return { ok: false, error: "أدخل كمية صحيحة" };
     }
 
-    const client = db();
-    const table = itemType === "flavor" ? "flavors" : itemType === "packaging" ? "packaging" : "extras";
-    const column = itemType === "flavor" ? "stock_grams" : "stock_qty";
-    const unit = itemType === "flavor" ? "gram" : "piece";
-
-    const { data: row, error: readErr } = await client
-      .from(table).select(`id,${column}`).eq("id", itemId).single();
-    if (readErr) throw new Error(readErr.message);
-
-    const current = Number((row as Record<string, unknown>)[column] ?? 0);
-    const { error: upErr } = await client
-      .from(table).update({ [column]: current + amount }).eq("id", itemId);
-    if (upErr) throw new Error(upErr.message);
-
-    const { error: movErr } = await client.from("inventory_movements").insert({
-      item_type: itemType,
-      flavor_id: itemType === "flavor" ? itemId : null,
-      packaging_id: itemType === "packaging" ? itemId : null,
-      extra_id: itemType === "extra" ? itemId : null,
-      qty_delta: amount,
-      unit,
-      reason: amount > 0 ? "restock" : "adjustment",
-      staff_id: s.staffId,
-      note: note ?? null,
+    const { data, error } = await db().rpc("adjust_stock", {
+      p_type: itemType,
+      p_id: itemId,
+      p_mode: mode,
+      p_amount: n,
+      p_staff: s.staffId,
     });
-    if (movErr) throw new Error(movErr.message);
+    if (error) throw new Error(error.message);
 
     revalidatePath("/inventory");
     revalidatePath("/pos");
-    return { ok: true, data: null };
+    revalidatePath("/reports");
+    return { ok: true, data: Number(data) };
   } catch (e) {
     return fail(e);
   }

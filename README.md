@@ -46,6 +46,7 @@ Run these in the Supabase **SQL Editor**, in order:
 2. `supabase/migrations/0002_functions.sql` — sales logic, shift close, reports, security
 3. `supabase/migrations/0003_staff_admin.sql` and `0004_staff_archive.sql` — staff management
 4. `0006_pin_only_login.sql` — PIN-only login, unique PINs, wrong-guess lockout
+   `0007_adjust_stock.sql` — atomic stock delivery / stock-count changes
 5. *(optional)* `0005_staff_name_reuse.sql` — lets a deleted person's name be reused
 6. `supabase/seed.sql` — starting flavors, cups, extras, prices, and two users
 
@@ -124,7 +125,7 @@ src/
   app/close       close shift + Z-report
   app/reports     manager dashboard
   app/products    add / edit products, flavors, extras, packaging
-  app/inventory   restock
+  app/inventory   stock: «+ توريد» adds a delivery, «تعيين» sets the counted amount
   app/staff       add / edit / delete cashiers and managers
   app/settings    shop name, contact details, receipt footer
   lib/actions.ts  server actions (all mutations)
