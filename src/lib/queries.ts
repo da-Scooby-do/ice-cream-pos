@@ -1,7 +1,7 @@
 // قراءات السيرفر | server-side reads, used by Server Components.
 import { db } from "./supabase";
 import type {
-  AdminExtra, AdminFlavor, AdminPackaging, AdminStaff, AdminVariant,
+  AdminExtra, AdminFlavor, AdminIngredient, AdminPackaging, AdminStaff, AdminVariant,
   Extra, Flavor, LowStockRow, ShiftSummary, Variant,
 } from "./types";
 
@@ -50,7 +50,7 @@ export async function getPosCatalog() {
       .eq("is_active", true).order("sort_order"),
     client.from("extras")
       .select("id,name_ar,price,stock_qty,low_stock_qty")
-      .eq("is_active", true).order("sort_order"),
+      .eq("is_active", true).eq("kind", "topping").order("sort_order"),
     getSettings(),
     getLowStock(),
   ]);
@@ -114,7 +114,7 @@ export async function getInventory() {
   const [flavors, packaging, extras] = await Promise.all([
     client.from("flavors").select("id,name_ar,stock_grams,low_stock_grams,is_active").order("sort_order"),
     client.from("packaging").select("id,name_ar,kind,stock_qty,low_stock_qty,is_active").order("sort_order"),
-    client.from("extras").select("id,name_ar,stock_qty,low_stock_qty,unit,is_active").order("sort_order"),
+    client.from("extras").select("id,name_ar,stock_qty,low_stock_qty,unit,kind,is_active").order("sort_order"),
   ]);
   for (const r of [flavors, packaging, extras]) {
     if (r.error) throw new Error(r.error.message);
@@ -122,7 +122,8 @@ export async function getInventory() {
   return {
     flavors: flavors.data ?? [],
     packaging: packaging.data ?? [],
-    extras: extras.data ?? [],
+    extras: (extras.data ?? []).filter((x) => x.kind !== "ingredient"),
+    ingredients: (extras.data ?? []).filter((x) => x.kind === "ingredient"),
   };
 }
 
@@ -131,13 +132,13 @@ export async function getCatalogAdmin() {
   const client = db();
   const [variants, flavors, extras, packaging] = await Promise.all([
     client.from("product_variants")
-      .select("id,name_ar,kind,category,scoops,grams_per_scoop,price,price_per_kg,max_flavors,packaging_id,spoon_packaging_id,sort_order,is_active")
+      .select("id,name_ar,kind,category,scoops,grams_per_scoop,price,price_per_kg,max_flavors,packaging_id,spoon_packaging_id,ingredient_id,ingredient_qty,sort_order,is_active")
       .order("sort_order"),
     client.from("flavors")
       .select("id,name_ar,color,stock_grams,low_stock_grams,sort_order,is_active")
       .order("sort_order"),
     client.from("extras")
-      .select("id,name_ar,price,stock_qty,low_stock_qty,sort_order,is_active")
+      .select("id,name_ar,price,stock_qty,low_stock_qty,sort_order,is_active,kind")
       .order("sort_order"),
     client.from("packaging")
       .select("id,name_ar,kind,stock_qty,low_stock_qty,sort_order,is_active")
@@ -149,7 +150,8 @@ export async function getCatalogAdmin() {
   return {
     variants: (variants.data ?? []) as AdminVariant[],
     flavors: (flavors.data ?? []) as AdminFlavor[],
-    extras: (extras.data ?? []) as AdminExtra[],
+    extras: (extras.data ?? []).filter((x) => x.kind !== "ingredient") as AdminExtra[],
+    ingredients: (extras.data ?? []).filter((x) => x.kind === "ingredient") as AdminIngredient[],
     packaging: (packaging.data ?? []) as AdminPackaging[],
   };
 }

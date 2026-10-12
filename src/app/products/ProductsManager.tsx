@@ -2,12 +2,12 @@
 
 import { useState, useTransition } from "react";
 import {
-  saveExtraAction, saveFlavorAction, savePackagingAction, saveVariantAction,
+  saveExtraAction, saveFlavorAction, saveIngredientAction, savePackagingAction, saveVariantAction,
   type ActionResult,
 } from "@/lib/actions";
-import { money, num, weight } from "@/lib/money";
+import { money, num, volume, weight } from "@/lib/money";
 import type {
-  AdminExtra, AdminFlavor, AdminPackaging, AdminVariant, PackagingKind,
+  AdminExtra, AdminFlavor, AdminIngredient, AdminPackaging, AdminVariant, PackagingKind,
 } from "@/lib/types";
 import {
   PRODUCT_TYPES, PRODUCT_TYPE_LABEL, productType, toKindAndCategory, type ProductType,
@@ -27,12 +27,13 @@ const FLAVOR_COLORS = [
   "#A8C256", "#C98A3C", "#7B4B2A", "#F5D76E", "#9B5DE5", "#4CC9F0",
 ];
 
-type Tab = "variants" | "flavors" | "extras" | "packaging";
+type Tab = "variants" | "flavors" | "extras" | "ingredients" | "packaging";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "variants", label: "الأصناف" },
   { key: "flavors", label: "النكهات" },
   { key: "extras", label: "الإضافات" },
+  { key: "ingredients", label: "الحليب والمكونات" },
   { key: "packaging", label: "الأكواب والتعبئة" },
 ];
 
@@ -40,17 +41,19 @@ type Editing =
   | { tab: "variants"; row: AdminVariant | null }
   | { tab: "flavors"; row: AdminFlavor | null }
   | { tab: "extras"; row: AdminExtra | null }
+  | { tab: "ingredients"; row: AdminIngredient | null }
   | { tab: "packaging"; row: AdminPackaging | null };
 
 const nextOrder = (rows: { sort_order: number }[]) =>
   rows.reduce((m, r) => Math.max(m, Number(r.sort_order) || 0), 0) + 1;
 
 export default function ProductsManager({
-  variants, flavors, extras, packaging, defaultScoopGrams,
+  variants, flavors, extras, ingredients, packaging, defaultScoopGrams,
 }: {
   variants: AdminVariant[];
   flavors: AdminFlavor[];
   extras: AdminExtra[];
+  ingredients: AdminIngredient[];
   packaging: AdminPackaging[];
   defaultScoopGrams: number;
 }) {
@@ -74,6 +77,7 @@ export default function ProductsManager({
     variants: "صنف جديد / ميلك شيك",
     flavors: "نكهة جديدة",
     extras: "إضافة جديدة",
+    ingredients: "مكوّن جديد",
     packaging: "عبوة جديدة",
   };
 
@@ -119,7 +123,11 @@ export default function ProductsManager({
                 detail={
                   v.kind === "weight"
                     ? `${money(v.price_per_kg)} / كجم · ${packName(v.packaging_id) ?? "بدون عبوة"}`
-                    : `${money(v.price)} · ${num(v.scoops)} سكوب · حتى ${num(v.max_flavors)} نكهات · ${packName(v.packaging_id) ?? "بدون عبوة"}`
+                    : `${money(v.price)} · ${num(v.scoops)} سكوب · حتى ${num(v.max_flavors)} نكهات · ${packName(v.packaging_id) ?? "بدون عبوة"}${
+                        v.ingredient_id && Number(v.ingredient_qty) > 0
+                          ? ` · ${volume(v.ingredient_qty)} ${ingredients.find((g) => g.id === v.ingredient_id)?.name_ar ?? ""}`
+                          : ""
+                      }`
                 }
                 pending={pending}
                 onEdit={() => setEditing({ tab: "variants", row: v })}
@@ -154,6 +162,33 @@ export default function ProductsManager({
               />
             ))}
 
+          {tab === "ingredients" &&
+            (ingredients.length === 0 ? (
+              <li className="px-2 py-6 text-sm text-choco/40 text-center">لا توجد مكونات بعد — أضف «حليب».</li>
+            ) : (
+              ingredients.map((g) => (
+                <Row
+                  key={g.id}
+                  active={g.is_active}
+                  title={g.name_ar}
+                  badge="مكوّن"
+                  detail={`المتوفر ${volume(g.stock_qty)} · تنبيه عند ${volume(g.low_stock_qty)} · يُستخدم في: ${
+                    variants.filter((v) => v.ingredient_id === g.id).map((v) => v.name_ar).join("، ") || "لا شيء بعد"
+                  }`}
+                  pending={pending}
+                  onEdit={() => setEditing({ tab: "ingredients", row: g })}
+                  onToggle={() =>
+                    toggle(() =>
+                      saveIngredientAction({
+                        id: g.id, name_ar: g.name_ar, low_stock_ml: Number(g.low_stock_qty),
+                        sort_order: g.sort_order, is_active: !g.is_active,
+                      })
+                    )
+                  }
+                />
+              ))
+            ))}
+
           {tab === "packaging" &&
             packaging.map((p) => (
               <Row
@@ -180,6 +215,7 @@ export default function ProductsManager({
         <VariantForm
           row={editing.row}
           packaging={packaging}
+          ingredients={ingredients}
           defaultScoopGrams={defaultScoopGrams}
           nextSort={nextOrder(variants)}
           onClose={() => setEditing(null)}
@@ -190,6 +226,9 @@ export default function ProductsManager({
       )}
       {editing?.tab === "extras" && (
         <ExtraForm row={editing.row} nextSort={nextOrder(extras)} onClose={() => setEditing(null)} />
+      )}
+      {editing?.tab === "ingredients" && (
+        <IngredientForm row={editing.row} nextSort={nextOrder(ingredients) + 100} onClose={() => setEditing(null)} />
       )}
       {editing?.tab === "packaging" && (
         <PackagingForm row={editing.row} nextSort={nextOrder(packaging)} onClose={() => setEditing(null)} />
@@ -270,10 +309,11 @@ function ActiveToggle({ value, onChange }: { value: boolean; onChange: (v: boole
 // نموذج الصنف | product form
 // ---------------------------------------------------------------------
 function VariantForm({
-  row, packaging, defaultScoopGrams, nextSort, onClose,
+  row, packaging, ingredients, defaultScoopGrams, nextSort, onClose,
 }: {
   row: AdminVariant | null;
   packaging: AdminPackaging[];
+  ingredients: AdminIngredient[];
   defaultScoopGrams: number;
   nextSort: number;
   onClose: () => void;
@@ -294,6 +334,9 @@ function VariantForm({
   const [spoonId, setSpoonId] = useState(row ? row.spoon_packaging_id ?? "" : spoons[0]?.id ?? "");
   const [sort, setSort] = useState(str(row?.sort_order, String(nextSort)));
   const [active, setActive] = useState(row?.is_active ?? true);
+  const milk = ingredients.find((g) => g.is_active && g.name_ar.includes("حليب")) ?? ingredients.find((g) => g.is_active);
+  const [ingId, setIngId] = useState(row ? row.ingredient_id ?? "" : "");
+  const [ingQty, setIngQty] = useState(str(row?.ingredient_qty, ""));
   const { pending, error, save } = useSave(onClose);
 
   // تغيير النوع لصنف جديد يقترح العبوة المناسبة | sensible packaging per type
@@ -315,6 +358,11 @@ function VariantForm({
       setSpoonId(straw?.id ?? spoons[0]?.id ?? "");
       setScoops("3");
       setMaxFlavors("2");
+      // milkshakes use milk: 100 ml per scoop to start
+      if (milk) {
+        setIngId(milk.id);
+        setIngQty("300");
+      }
     } else {
       setPackId(firstOf(["cup"]));
       setSpoonId(spoons[0]?.id ?? "");
@@ -323,8 +371,10 @@ function VariantForm({
 
   const isWeight = type === "weight";
   const contentGrams = isWeight ? null : Number(scoops || 0) * Number(grams || 0);
+  const ing = ingredients.find((g) => g.id === ingId);
   const deducts = [
     isWeight ? "الوزن المُدخل من النكهات" : `${num(contentGrams)} جرام من النكهات`,
+    ing && Number(ingQty) > 0 ? `${volume(Number(ingQty))} ${ing.name_ar}` : null,
     containers.find((p) => p.id === packId)?.name_ar,
     spoons.find((p) => p.id === spoonId)?.name_ar,
   ].filter(Boolean);
@@ -348,6 +398,8 @@ function VariantForm({
             max_flavors: Number(maxFlavors),
             packaging_id: packId || null,
             spoon_packaging_id: spoonId || null,
+            ingredient_id: ingId || null,
+            ingredient_qty: ingId ? Number(ingQty || 0) : null,
             sort_order: Number(sort),
             is_active: active,
           })
@@ -421,6 +473,24 @@ function VariantForm({
           <NumberInput value={sort} onChange={setSort} step="1" />
         </Field>
       </div>
+
+      {ingredients.length > 0 && (
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="مكوّن يُخصم مع كل بيع" hint="مثل الحليب في الميلك شيك">
+            <select value={ingId} onChange={(e) => setIngId(e.target.value)} className={inputCls}>
+              <option value="">بدون</option>
+              {ingredients.map((g) => (
+                <option key={g.id} value={g.id}>{g.name_ar}{g.is_active ? "" : " (مخفي)"}</option>
+              ))}
+            </select>
+          </Field>
+          {ingId && (
+            <Field label="الكمية لكل كوب (مل)">
+              <NumberInput value={ingQty} onChange={setIngQty} step="10" />
+            </Field>
+          )}
+        </div>
+      )}
 
       <p className="text-xs text-choco/60 bg-cream rounded-xl px-3 py-2.5">
         كل بيع لهذا الصنف يخصم من المخزون: <b>{deducts.join(" + ")}</b>
@@ -622,6 +692,66 @@ function PackagingForm({ row, nextSort, onClose }: { row: AdminPackaging | null;
           <NumberInput value={sort} onChange={setSort} step="1" />
         </Field>
       </div>
+      <ActiveToggle value={active} onChange={setActive} />
+    </FormShell>
+  );
+}
+
+// ---------------------------------------------------------------------
+// نموذج المكوّن | ingredient form (milk) — amounts typed in litres
+// ---------------------------------------------------------------------
+function IngredientForm({
+  row, nextSort, onClose,
+}: {
+  row: AdminIngredient | null;
+  nextSort: number;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState(row?.name_ar ?? "حليب");
+  const [lowL, setLowL] = useState(str(row ? Number(row.low_stock_qty) / 1000 : 5));
+  const [openingL, setOpeningL] = useState("");
+  const [sort, setSort] = useState(str(row?.sort_order, String(nextSort)));
+  const [active, setActive] = useState(row?.is_active ?? true);
+  const { pending, error, save } = useSave(onClose);
+
+  return (
+    <FormShell
+      title={row ? `تعديل: ${row.name_ar}` : "مكوّن جديد"}
+      error={error}
+      pending={pending}
+      onClose={onClose}
+      onSave={() =>
+        save(() =>
+          saveIngredientAction({
+            id: row?.id,
+            name_ar: name,
+            low_stock_ml: Math.round(Number(lowL) * 1000),
+            opening_stock_ml: Math.round(Number(openingL || 0) * 1000),
+            sort_order: Number(sort),
+            is_active: active,
+          })
+        )
+      }
+    >
+      <Field label="الاسم (مثال: حليب)">
+        <input value={name} onChange={(e) => setName(e.target.value)} className={inputCls} maxLength={40} autoFocus />
+      </Field>
+      <div className="grid sm:grid-cols-3 gap-3">
+        <Field label="تنبيه النقص عند (لتر)">
+          <NumberInput value={lowL} onChange={setLowL} />
+        </Field>
+        {!row && (
+          <Field label="الرصيد الحالي (لتر)" hint="اختياري — يُسجَّل كتوريد">
+            <NumberInput value={openingL} onChange={setOpeningL} />
+          </Field>
+        )}
+        <Field label="الترتيب">
+          <NumberInput value={sort} onChange={setSort} step="1" />
+        </Field>
+      </div>
+      <p className="text-xs text-choco/50 bg-cream rounded-xl px-3 py-2.5">
+        المكوّن لا يظهر في شاشة الكاشير. اختر في كل صنف (مثل الميلك شيك) كمية المكوّن التي يستخدمها، فتُخصم مع كل بيع.
+      </p>
       <ActiveToggle value={active} onChange={setActive} />
     </FormShell>
   );

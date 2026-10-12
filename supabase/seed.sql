@@ -128,3 +128,16 @@ insert into extras (name_ar, price, unit, qty_per_use, stock_qty, low_stock_qty,
   ('شوكولاتة سائلة',  400, 'portion', 1, 250, 25, 6),
   ('عسل',             300, 'portion', 1, 150, 15, 7)
 on conflict (name_ar) do nothing;
+
+-- ---------------------------------------------------------------------
+-- الحليب | milk — an ingredient (not a topping), tracked in ml.
+-- 20 L to start, alert at 5 L; milkshakes use 100 ml per scoop.
+-- ---------------------------------------------------------------------
+insert into extras (name_ar, price, unit, qty_per_use, stock_qty, low_stock_qty, kind, sort_order)
+values ('حليب', 0, 'ml', 1, 20000, 5000, 'ingredient', 100)
+on conflict (name_ar) do nothing;
+
+update product_variants
+   set ingredient_id  = (select id from extras where name_ar = 'حليب'),
+       ingredient_qty = coalesce(scoops, 3) * 100
+ where category = 'shake' and ingredient_id is null;

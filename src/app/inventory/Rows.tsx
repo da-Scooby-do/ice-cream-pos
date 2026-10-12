@@ -2,15 +2,16 @@
 
 import { useState, useTransition } from "react";
 import { adjustStockAction } from "@/lib/actions";
-import { num, weight } from "@/lib/money";
+import { stockAmount } from "@/lib/money";
 
-type Unit = "gram" | "piece" | "portion";
+type Unit = "gram" | "ml" | "piece" | "portion";
 
-const UNIT_WORD: Record<Unit, string> = { gram: "كجم", piece: "حبة", portion: "حصة" };
+// what the manager types in: kg for flavors, litres for milk
+const UNIT_WORD: Record<Unit, string> = { gram: "كجم", ml: "لتر", piece: "حبة", portion: "حصة" };
 
-/** عرض الرصيد | a stock amount for display (flavors are stored in grams, shown in kg). */
+/** عرض الرصيد | a stock amount for display (grams shown in kg, ml in litres). */
 function shownStock(stock: number, unit: Unit) {
-  return unit === "gram" ? weight(stock) : `${num(stock)} ${UNIT_WORD[unit]}`;
+  return stockAmount(stock, unit);
 }
 
 // صف مخزون | one stock row.
@@ -36,8 +37,8 @@ export function StockRow({
 
   function run(mode: "add" | "set") {
     if (!valid || (mode === "add" && entered === 0)) return;
-    // flavors are typed in kg, stored in grams
-    const amount = unit === "gram" ? Math.round(entered * 1000) : entered;
+    // flavors are typed in kg (stored in grams), milk in litres (stored in ml)
+    const amount = unit === "gram" || unit === "ml" ? Math.round(entered * 1000) : entered;
     setMsg(null);
     start(async () => {
       const res = await adjustStockAction(type, id, mode, amount);
@@ -65,7 +66,7 @@ export function StockRow({
           <input
             type="number"
             inputMode="decimal"
-            step={unit === "gram" ? "0.1" : "1"}
+            step={unit === "gram" || unit === "ml" ? "0.1" : "1"}
             value={qty}
             onChange={(e) => {
               setMsg(null);

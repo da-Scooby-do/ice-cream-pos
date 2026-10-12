@@ -2,7 +2,7 @@
 
 // تنبيه النقص | the red badge. One glance tells dad what to restock.
 import { useState } from "react";
-import { num } from "@/lib/money";
+import { num, stockAmount } from "@/lib/money";
 import type { LowStockRow } from "@/lib/types";
 
 const TYPE_LABEL: Record<string, string> = {
@@ -41,7 +41,7 @@ export default function LowStockBadge({ rows }: { rows: LowStockRow[] }) {
                   </span>
                 </span>
                 <span className="tnum text-red-700 font-bold text-xs">
-                  {num(r.stock)} {r.unit === "gram" ? "جرام" : r.unit === "piece" ? "حبة" : ""}
+                  {stockAmount(r.stock, r.unit)}
                 </span>
               </li>
             ))}

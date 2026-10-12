@@ -96,12 +96,24 @@ export type Receipt = {
 export type AdminVariant = Variant & {
   packaging_id: string | null;
   spoon_packaging_id: string | null;
+  ingredient_id: string | null;
+  ingredient_qty: number | null;
   is_active: boolean;
 };
 
 export type AdminFlavor = Flavor & { sort_order: number; is_active: boolean };
 
 export type AdminExtra = Extra & { sort_order: number; is_active: boolean };
+
+/** مكوّن مثل الحليب — مخزون بالمل، لا يظهر كإضافة | an ingredient such as milk */
+export type AdminIngredient = {
+  id: string;
+  name_ar: string;
+  stock_qty: number;
+  low_stock_qty: number;
+  sort_order: number;
+  is_active: boolean;
+};
 
 export type PackagingKind = "cup" | "cone" | "spoon" | "biscuit" | "bag";
 

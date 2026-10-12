@@ -27,6 +27,7 @@ An Arabic, right-to-left point-of-sale and inventory system for a single ice cre
 | **الإعدادات** | Shop name, phone, address and receipt footer (multi-line), with a live receipt preview. |
 | **سجل المبيعات** | Every sale by date (today / yesterday / 7 days / this month / any range), cashier, payment and status, with period totals; tap a sale to see its items, flavors and extras, or cancel it. |
 | **ميلك شيك** | Milkshakes in their own section: fixed price per size; each one deducts its ice cream (scoops × grams), a shake cup and a straw. Managed like any other product. |
+| **الحليب** | Milk is stock too (in litres on المخزون, with a low-stock alert). Each milkshake size uses a set amount (default 100 ml per scoop, editable per product); every sale deducts it and a cancelled sale returns it. |
 
 ## الأمان | Security
 
@@ -50,6 +51,7 @@ Run these in the Supabase **SQL Editor**, in order:
 4. `0006_pin_only_login.sql` — PIN-only login, unique PINs, wrong-guess lockout
    `0007_adjust_stock.sql` — atomic stock delivery / stock-count changes
    `0008_shakes_and_sales.sql` — milkshake category + sales-history totals
+   `0009_milk_tracking.sql` — milk (ingredients) tracked in stock, deducted per milkshake
 5. *(optional)* `0005_staff_name_reuse.sql` — lets a deleted person's name be reused
 6. `supabase/seed.sql` — starting flavors, cups, extras, prices, and two users
 

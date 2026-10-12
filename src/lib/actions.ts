@@ -279,6 +279,8 @@ export type VariantInput = {
   max_flavors: number;
   packaging_id?: string | null;
   spoon_packaging_id?: string | null;
+  ingredient_id?: string | null;
+  ingredient_qty?: number | null;
   sort_order?: number;
   is_active: boolean;
 };
@@ -305,6 +307,11 @@ export async function saveVariantAction(input: VariantInput): Promise<ActionResu
       max_flavors: numberIn(input.max_flavors, "أقصى عدد نكهات", 1, 8, true),
       packaging_id: optionalId(input.packaging_id),
       spoon_packaging_id: optionalId(input.spoon_packaging_id),
+      // milk (or another ingredient) used per unit sold
+      ingredient_id: optionalId(input.ingredient_id),
+      ingredient_qty: optionalId(input.ingredient_id)
+        ? numberIn(input.ingredient_qty ?? 0, "كمية الحليب", 0, 5000)
+        : null,
       sort_order: numberIn(input.sort_order ?? 0, "الترتيب", 0, 9999, true),
       is_active: !!input.is_active,
     };
@@ -607,6 +614,57 @@ export async function saveSettingsAction(input: SettingsInput): Promise<ActionRe
 
     // the name appears on every screen and receipt
     revalidatePath("/", "layout");
+    return { ok: true, data: null };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ---------------------------------------------------------------------
+// المكونات | ingredients such as milk — stock in ml, never sold as a topping
+// ---------------------------------------------------------------------
+export type IngredientInput = {
+  id?: string;
+  name_ar: string;
+  low_stock_ml: number;
+  opening_stock_ml?: number;
+  sort_order?: number;
+  is_active: boolean;
+};
+
+export async function saveIngredientAction(input: IngredientInput): Promise<ActionResult> {
+  try {
+    const s = await requireManager();
+    const row = {
+      name_ar: cleanName(input.name_ar),
+      low_stock_qty: numberIn(input.low_stock_ml, "حد التنبيه", 0, 10_000_000),
+      sort_order: numberIn(input.sort_order ?? 0, "الترتيب", 0, 9999, true),
+      is_active: !!input.is_active,
+    };
+
+    const client = db();
+    if (input.id) {
+      const { error } = await client
+        .from("extras").update(row).eq("id", input.id).eq("kind", "ingredient");
+      if (error) throw dbError(error);
+    } else {
+      const opening = numberIn(input.opening_stock_ml ?? 0, "الرصيد", 0, 100_000_000);
+      const { data, error } = await client
+        .from("extras")
+        .insert({ ...row, kind: "ingredient", unit: "ml", price: 0, qty_per_use: 1, stock_qty: opening })
+        .select("id")
+        .single();
+      if (error) throw dbError(error);
+      if (opening) {
+        const { error: e2 } = await client.from("inventory_movements").insert({
+          item_type: "extra", extra_id: data.id, qty_delta: opening, unit: "ml",
+          reason: "restock", staff_id: s.staffId, note: "رصيد البداية",
+        });
+        if (e2) throw dbError(e2);
+      }
+    }
+
+    revalidateCatalog();
     return { ok: true, data: null };
   } catch (e) {
     return fail(e);

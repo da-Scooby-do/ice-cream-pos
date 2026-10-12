@@ -40,6 +40,17 @@ export default async function InventoryPage() {
           ))}
         </Section>
 
+        <Section title="الحليب والمكونات" hint="باللتر — مثال: 1.5 = لتر ونصف. يُخصم تلقائياً مع كل ميلك شيك.">
+          {inv.ingredients.length === 0 ? (
+            <li className="py-3 text-sm text-choco/40">لا توجد مكونات — أضفها من «الأصناف والأسعار».</li>
+          ) : (
+            inv.ingredients.map((x) => (
+              <StockRow key={x.id} type="extra" id={x.id} name={x.name_ar}
+                stock={Number(x.stock_qty)} threshold={Number(x.low_stock_qty)} unit="ml" />
+            ))
+          )}
+        </Section>
+
         <Section title="الإضافات" hint="بعدد الحصص.">
           {inv.extras.map((x) => (
             <StockRow key={x.id} type="extra" id={x.id} name={x.name_ar}

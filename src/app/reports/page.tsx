@@ -3,7 +3,7 @@ import { getSession } from "@/lib/session";
 import {
   getDailySales, getLowStock, getOpenShift, getRecentOrders, getShiftSummary, getTopFlavors,
 } from "@/lib/queries";
-import { money, num, weight } from "@/lib/money";
+import { money, num, stockAmount, weight } from "@/lib/money";
 import ManagerNav from "@/components/ManagerNav";
 import VoidButton from "./VoidButton";
 
@@ -67,7 +67,7 @@ export default async function ReportsPage() {
                 <span key={`${r.item_type}-${r.id}`} className="bg-white rounded-xl px-3 py-1.5 text-sm font-bold text-choco">
                   {r.name_ar}{" "}
                   <span className="text-red-600 tnum text-xs">
-                    {r.unit === "gram" ? weight(r.stock) : num(r.stock)}
+                    {stockAmount(r.stock, r.unit)}
                   </span>
                 </span>
               ))}

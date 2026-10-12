@@ -18,6 +18,20 @@ export function num(amount: number | string | null | undefined): string {
   return nf.format(Number.isFinite(n) ? n : 0);
 }
 
+// 1500 ml → "1.5 لتر" ، 300 ml → "300 مل"
+export function volume(ml: number | null | undefined): string {
+  const v = Number(ml ?? 0);
+  if (!Number.isFinite(v) || v <= 0) return "0 مل";
+  return v >= 1000 ? `${nf.format(v / 1000)} لتر` : `${nf.format(v)} مل`;
+}
+
+/** كمية مخزون بوحدتها | a stock amount in its own unit */
+export function stockAmount(amount: number, unit: string): string {
+  if (unit === "gram") return weight(amount);
+  if (unit === "ml") return volume(amount);
+  return `${nf.format(Number(amount) || 0)} ${unit === "piece" ? "حبة" : "حصة"}`;
+}
+
 // 1250 g → "1.25 كجم" ، 300 g → "300 جرام"
 export function weight(grams: number | null | undefined): string {
   const g = Number(grams ?? 0);
