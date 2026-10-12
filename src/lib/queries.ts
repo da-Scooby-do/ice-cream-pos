@@ -10,6 +10,7 @@ export async function getStaff(): Promise<Staff[]> {
     .from("staff")
     .select("id,name,role")
     .eq("is_active", true)
+    .is("deleted_at", null)
     .order("role", { ascending: true })
     .order("name", { ascending: true });
   if (error) throw new Error(error.message);
@@ -170,6 +171,7 @@ export async function getStaffAdmin(): Promise<AdminStaff[]> {
   const { data, error } = await db()
     .from("staff")
     .select("id,name,role,is_active,created_at,shifts(opened_at)")
+    .is("deleted_at", null)
     .order("is_active", { ascending: false })
     .order("role", { ascending: false })
     .order("name")

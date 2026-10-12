@@ -32,6 +32,7 @@ const KIND_ACCENT: Record<VariantKind, string> = {
 type Settings = {
   shop_name: string;
   phone: string | null;
+  address: string | null;
   receipt_footer: string | null;
   default_scoop_grams: number;
 };
@@ -398,6 +399,7 @@ export default function PosScreen({
         receipt={receipt}
         shopName={settings.shop_name}
         phone={settings.phone}
+        address={settings.address}
         footer={settings.receipt_footer}
       />
     </>

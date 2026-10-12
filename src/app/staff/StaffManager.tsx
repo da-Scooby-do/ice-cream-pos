@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { saveStaffAction } from "@/lib/actions";
+import { useState, useTransition } from "react";
+import { deleteStaffAction, saveStaffAction } from "@/lib/actions";
 import type { AdminStaff, Role } from "@/lib/types";
 import { Field, FormShell, inputCls, useSave } from "@/components/form";
 
@@ -70,7 +70,8 @@ export default function StaffManager({ staff, meId }: { staff: AdminStaff[]; meI
       </section>
 
       <p className="text-xs text-choco/40 px-2">
-        الموظف الموقوف لا يظهر في شاشة الدخول ويُسجَّل خروجه فوراً، وتبقى فواتيره القديمة محفوظة باسمه.
+        الموظف الموقوف لا يظهر في شاشة الدخول ويُسجَّل خروجه فوراً — يمكن إعادة تفعيله لاحقاً.
+        الحذف يزيله من القائمة نهائياً. في الحالتين تبقى فواتيره القديمة محفوظة باسمه.
       </p>
 
       {editing && (
@@ -151,6 +152,67 @@ function StaffForm({ row, isMe, onClose }: { row: AdminStaff | null; isMe: boole
       >
         {active ? "✓ الحساب نشط — يستطيع الدخول" : "الحساب موقوف — لا يستطيع الدخول"}
       </button>
+
+      {row && !isMe && <DeleteStaff id={row.id} name={row.name} onDone={onClose} />}
     </FormShell>
+  );
+}
+
+// ---------------------------------------------------------------------
+// حذف الموظف — بخطوتين للتأكيد | remove, with a confirm step
+// ---------------------------------------------------------------------
+function DeleteStaff({ id, name, onDone }: { id: string; name: string; onDone: () => void }) {
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+
+  function remove() {
+    setError(null);
+    start(async () => {
+      const res = await deleteStaffAction(id);
+      if (res.ok) onDone();
+      else {
+        setError(res.error);
+        setConfirming(false);
+      }
+    });
+  }
+
+  return (
+    <div className="border-t border-black/5 pt-4 space-y-2">
+      {!confirming ? (
+        <button
+          type="button"
+          onClick={() => setConfirming(true)}
+          className="btn w-full py-3 text-sm bg-red-50 text-red-600 border-2 border-red-100"
+        >
+          حذف {name}
+        </button>
+      ) : (
+        <div className="rounded-2xl bg-red-50 border-2 border-red-200 p-3 space-y-2">
+          <p className="text-sm font-bold text-red-700">
+            حذف {name}؟ سيختفي من قائمة الموظفين وشاشة الدخول. فواتيره وورديّاته السابقة تبقى محفوظة باسمه.
+          </p>
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={() => setConfirming(false)}
+              className="btn py-2.5 text-sm bg-white text-choco border border-black/10"
+            >
+              تراجع
+            </button>
+            <button
+              type="button"
+              disabled={pending}
+              onClick={remove}
+              className="btn col-span-2 py-2.5 text-sm bg-red-600 text-white"
+            >
+              {pending ? "جاري الحذف…" : "نعم، احذف"}
+            </button>
+          </div>
+        </div>
+      )}
+      {error && <p className="text-sm font-bold text-red-600 bg-red-50 rounded-xl px-3 py-2.5">{error}</p>}
+    </div>
   );
 }

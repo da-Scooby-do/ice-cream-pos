@@ -23,7 +23,8 @@ An Arabic, right-to-left point-of-sale and inventory system for a single ice cre
 | **تقفيل الوردية** | Count the drawer → see cash vs card, expected vs counted, **short / over** → prints the Z-report. |
 | **لوحة المدير** | Live shift totals, daily sales, top flavors, low stock, void orders, restock — works on a phone. |
 | **إدارة الأصناف** | The manager adds and edits products (type, price, scoops, max flavors, which cup/cone/spoon it uses), flavors (name, button colour), extras, and cups/cones. Items are hidden rather than deleted, so old receipts stay intact. |
-| **الموظفون** | The manager adds cashiers and managers, renames them, resets PINs, and suspends accounts. Changes apply on the next click — no waiting for old logins to expire. A manager can't demote or suspend themselves, and the last manager can't be removed. |
+| **الموظفون** | The manager adds cashiers and managers, renames them, resets PINs, suspends or deletes accounts. Changes apply on the next click. Deleted staff vanish from the list and login screen but past receipts keep their name. A manager can't demote, suspend or delete themselves, and the last manager can't be removed. |
+| **الإعدادات** | Shop name, phone, address and receipt footer (multi-line), with a live receipt preview. |
 
 ## الأمان | Security
 
@@ -43,8 +44,9 @@ Run these in the Supabase **SQL Editor**, in order:
 
 1. `supabase/migrations/0001_init.sql` — tables
 2. `supabase/migrations/0002_functions.sql` — sales logic, shift close, reports, security
-3. `supabase/migrations/0003_staff_admin.sql` — staff management
-4. `supabase/seed.sql` — starting flavors, cups, extras, prices, and two users
+3. `supabase/migrations/0003_staff_admin.sql` and `0004_staff_archive.sql` — staff management
+4. *(optional)* `0005_staff_name_reuse.sql` — lets a deleted person's name be reused
+5. `supabase/seed.sql` — starting flavors, cups, extras, prices, and two users
 
 > ⚠️ **غيّر الأرقام السرية فوراً.** The seed creates `المدير` (PIN **1234**) and `كاشير 1` (PIN **1111**). Change them:
 > ```sql
@@ -122,7 +124,8 @@ src/
   app/reports     manager dashboard
   app/products    add / edit products, flavors, extras, packaging
   app/inventory   restock
-  app/staff       add / edit cashiers and managers
+  app/staff       add / edit / delete cashiers and managers
+  app/settings    shop name, contact details, receipt footer
   lib/actions.ts  server actions (all mutations)
   lib/queries.ts  server reads
   lib/session.ts  signed PIN session

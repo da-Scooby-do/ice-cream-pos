@@ -17,11 +17,13 @@ export default function ReceiptSheet({
   receipt,
   shopName,
   phone,
+  address,
   footer,
 }: {
   receipt: Receipt | null;
   shopName: string;
   phone?: string | null;
+  address?: string | null;
   footer?: string | null;
 }) {
   if (!receipt) return null;
@@ -36,6 +38,7 @@ export default function ReceiptSheet({
   return (
     <div className="receipt-sheet" aria-hidden="true">
       <div className="r-title">{shopName}</div>
+      {address ? <div className="r-sub">{address}</div> : null}
       {phone ? <div className="r-sub">{phone}</div> : null}
 
       <div className="r-rule" />
@@ -105,7 +108,7 @@ export default function ReceiptSheet({
       )}
 
       <div className="r-rule" />
-      <div className="r-center">{footer || "شكراً لزيارتكم"}</div>
+      <div className="r-center" style={{ whiteSpace: "pre-line" }}>{footer || "شكراً لزيارتكم"}</div>
     </div>
   );
 }

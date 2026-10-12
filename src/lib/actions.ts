@@ -516,11 +516,14 @@ export async function saveStaffAction(input: StaffInput): Promise<ActionResult> 
         }
       }
 
-      const { error } = await client
+      const { data: updated, error } = await client
         .from("staff")
         .update({ name, role: input.role, is_active: !!input.is_active })
-        .eq("id", input.id);
+        .eq("id", input.id)
+        .is("deleted_at", null)
+        .select("id");
       if (error) throw dbError(error);
+      if (!updated?.length) throw new Error("الموظف غير موجود");
 
       if (pin) {
         const { error: e3 } = await client.rpc("set_staff_pin", { p_staff_id: input.id, p_pin: pin });
@@ -530,6 +533,88 @@ export async function saveStaffAction(input: StaffInput): Promise<ActionResult> 
 
     revalidatePath("/staff");
     revalidatePath("/login");
+    return { ok: true, data: null };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/**
+ * حذف موظف | remove a staff member. They disappear from the staff list
+ * and the login screen; the row is archived so past receipts, shifts and
+ * Z-reports keep their name.
+ */
+export async function deleteStaffAction(staffId: string): Promise<ActionResult> {
+  try {
+    const me = await requireManager();
+    if (staffId === me.staffId) throw new Error("لا يمكنك حذف حسابك بنفسك");
+
+    const client = db();
+    const { data: target, error: e1 } = await client
+      .from("staff").select("role,is_active").eq("id", staffId).is("deleted_at", null).maybeSingle();
+    if (e1) throw dbError(e1);
+    if (!target) throw new Error("الموظف غير موجود");
+
+    if (target.role === "manager" && target.is_active) {
+      const { count, error: e2 } = await client
+        .from("staff")
+        .select("id", { count: "exact", head: true })
+        .eq("role", "manager")
+        .eq("is_active", true)
+        .is("deleted_at", null)
+        .neq("id", staffId);
+      if (e2) throw dbError(e2);
+      if (!count) throw new Error("يجب أن يبقى مدير واحد نشط على الأقل");
+    }
+
+    const { error } = await client.rpc("archive_staff", { p_staff_id: staffId });
+    if (error) throw dbError(error);
+
+    revalidatePath("/staff");
+    revalidatePath("/login");
+    return { ok: true, data: null };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// ---------------------------------------------------------------------
+// إعدادات المحل | shop name, contact details and receipt footer.
+// ---------------------------------------------------------------------
+export type SettingsInput = {
+  shop_name: string;
+  phone: string;
+  address: string;
+  receipt_footer: string;
+};
+
+function optionalText(v: unknown, label: string, max: number): string | null {
+  const t = String(v ?? "").trim().replace(/[ \t]+/g, " ");
+  if (t.length > max) throw new Error(`${label} طويل جداً (${max} حرفاً كحد أقصى)`);
+  return t === "" ? null : t;
+}
+
+export async function saveSettingsAction(input: SettingsInput): Promise<ActionResult> {
+  try {
+    await requireManager();
+    const shopName = String(input.shop_name ?? "").trim().replace(/\s+/g, " ");
+    if (!shopName) throw new Error("اكتب اسم المحل");
+    if (shopName.length > 40) throw new Error("اسم المحل طويل جداً (40 حرفاً كحد أقصى)");
+
+    const { error } = await db()
+      .from("shop_settings")
+      .update({
+        shop_name: shopName,
+        phone: optionalText(input.phone, "رقم الهاتف", 30),
+        address: optionalText(input.address, "العنوان", 80),
+        receipt_footer: optionalText(input.receipt_footer, "تذييل الفاتورة", 120),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", true);
+    if (error) throw dbError(error);
+
+    // the name appears on every screen and receipt
+    revalidatePath("/", "layout");
     return { ok: true, data: null };
   } catch (e) {
     return fail(e);
