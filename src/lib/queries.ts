@@ -46,7 +46,7 @@ export async function getPosCatalog() {
       .select("id,name_ar,color,stock_grams,low_stock_grams")
       .eq("is_active", true).order("sort_order"),
     client.from("product_variants")
-      .select("id,name_ar,kind,scoops,grams_per_scoop,price,price_per_kg,max_flavors,sort_order")
+      .select("id,name_ar,kind,category,scoops,grams_per_scoop,price,price_per_kg,max_flavors,sort_order")
       .eq("is_active", true).order("sort_order"),
     client.from("extras")
       .select("id,name_ar,price,stock_qty,low_stock_qty")
@@ -131,7 +131,7 @@ export async function getCatalogAdmin() {
   const client = db();
   const [variants, flavors, extras, packaging] = await Promise.all([
     client.from("product_variants")
-      .select("id,name_ar,kind,scoops,grams_per_scoop,price,price_per_kg,max_flavors,packaging_id,spoon_packaging_id,sort_order,is_active")
+      .select("id,name_ar,kind,category,scoops,grams_per_scoop,price,price_per_kg,max_flavors,packaging_id,spoon_packaging_id,sort_order,is_active")
       .order("sort_order"),
     client.from("flavors")
       .select("id,name_ar,color,stock_grams,low_stock_grams,sort_order,is_active")
@@ -172,4 +172,113 @@ export async function getStaffAdmin(): Promise<AdminStaff[]> {
     ...r,
     last_shift_at: shifts?.[0]?.opened_at ?? null,
   }));
+}
+
+// ---------------------------------------------------------------------
+// سجل المبيعات | sales history
+// ---------------------------------------------------------------------
+export const SALES_PAGE_SIZE = 50;
+
+/** اليوم بتوقيت الخرطوم | today's date in Khartoum, as YYYY-MM-DD */
+export function khartoumToday(offsetDays = 0): string {
+  const d = new Date(Date.now() + offsetDays * 864e5);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Khartoum" }).format(d);
+}
+
+/** [from 00:00, day after `to` 00:00) in Khartoum time (UTC+2, no DST) */
+function dayBounds(from: string, to: string) {
+  const end = new Date(`${to}T00:00:00+02:00`);
+  end.setUTCDate(end.getUTCDate() + 1);
+  return { fromIso: new Date(`${from}T00:00:00+02:00`).toISOString(), toIso: end.toISOString() };
+}
+
+export type SalesFilter = {
+  from: string;
+  to: string;
+  staffId?: string;
+  method?: "cash" | "card" | "wallet";
+  status?: "completed" | "void";
+  page: number;
+};
+
+export type SaleRow = {
+  id: string;
+  order_no: number;
+  created_at: string;
+  subtotal: number;
+  discount: number;
+  total: number;
+  payment_method: "cash" | "card" | "wallet";
+  paid_amount: number | null;
+  change_amount: number | null;
+  status: "completed" | "void";
+  void_reason: string | null;
+  staff: { name: string } | null;
+  order_items: {
+    name_ar: string;
+    qty: number;
+    line_total: number;
+    weight_grams: number | null;
+    order_item_flavors: { name_ar: string }[];
+    order_item_extras: { name_ar: string }[];
+  }[];
+};
+
+export type SalesSummary = {
+  orders: number;
+  total: number;
+  cash: number;
+  card: number;
+  discounts: number;
+  voids: number;
+  voided_total: number;
+};
+
+export async function getSalesHistory(f: SalesFilter) {
+  const { fromIso, toIso } = dayBounds(f.from, f.to);
+  const client = db();
+
+  let q = client
+    .from("orders")
+    .select(
+      "id,order_no,created_at,subtotal,discount,total,payment_method,paid_amount,change_amount,status,void_reason," +
+        "staff(name)," +
+        "order_items(name_ar,qty,line_total,weight_grams,order_item_flavors(name_ar),order_item_extras(name_ar))",
+      { count: "exact" }
+    )
+    .gte("created_at", fromIso)
+    .lt("created_at", toIso);
+  if (f.staffId) q = q.eq("staff_id", f.staffId);
+  if (f.method) q = q.eq("payment_method", f.method);
+  if (f.status) q = q.eq("status", f.status);
+
+  const start = f.page * SALES_PAGE_SIZE;
+  const [list, summary] = await Promise.all([
+    q.order("created_at", { ascending: false }).range(start, start + SALES_PAGE_SIZE - 1),
+    // totals cover the whole period, not just this page
+    client.rpc("sales_summary", {
+      p_from: fromIso,
+      p_to: toIso,
+      p_staff: f.staffId ?? null,
+      p_method: f.method ?? null,
+    }),
+  ]);
+  if (list.error) throw new Error(list.error.message);
+  if (summary.error) throw new Error(summary.error.message);
+
+  return {
+    rows: (list.data ?? []) as unknown as SaleRow[],
+    count: list.count ?? 0,
+    summary: summary.data as SalesSummary,
+  };
+}
+
+/** كل الأسماء، بما فيها المحذوفون، لفلتر السجل | every name, removed staff included */
+export async function getAllStaffNames() {
+  const { data, error } = await db()
+    .from("staff")
+    .select("id,name,deleted_at")
+    .order("name");
+  if (error) throw new Error(error.message);
+  return (data ?? []) as { id: string; name: string; deleted_at: string | null }[];
 }

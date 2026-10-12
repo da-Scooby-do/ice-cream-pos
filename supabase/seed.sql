@@ -44,7 +44,9 @@ insert into packaging (name_ar, kind, stock_qty, low_stock_qty, sort_order) valu
   ('كون',      'cone',    400, 100, 4),
   ('بسكويت',   'biscuit', 300,  80, 5),
   ('ملعقة',    'spoon',  1000, 200, 6),
-  ('كيس',      'bag',     300, 100, 7)
+  ('كيس',      'bag',     300, 100, 7),
+  ('كوب ميلك شيك', 'cup', 300,  50, 8),
+  ('شفاطة',    'spoon',   500, 100, 9)
 on conflict do nothing;
 
 -- ---------------------------------------------------------------------
@@ -98,6 +100,20 @@ values
      (select id from packaging where name_ar = 'كون'), 2, 31),
   ('بسكويت',     'cone', 2, 60, 1200,
      (select id from packaging where name_ar = 'بسكويت'), 2, 32)
+on conflict do nothing;
+
+-- ميلك شيك | milkshakes — a fixed-price cup in the 'shake' category
+insert into product_variants
+  (name_ar, kind, category, scoops, grams_per_scoop, price, packaging_id, spoon_packaging_id, max_flavors, sort_order)
+select v.name_ar, 'cup', 'shake', v.scoops, 60, v.price,
+       (select id from packaging where name_ar = 'كوب ميلك شيك'),
+       (select id from packaging where name_ar = 'شفاطة'),
+       v.max_flavors, v.sort_order
+from (values
+  ('ميلك شيك صغير', 2, 1500::numeric, 2, 40),
+  ('ميلك شيك وسط',  3, 2000::numeric, 2, 41),
+  ('ميلك شيك كبير', 4, 2500::numeric, 3, 42)
+) as v(name_ar, scoops, price, max_flavors, sort_order)
 on conflict do nothing;
 
 -- ---------------------------------------------------------------------

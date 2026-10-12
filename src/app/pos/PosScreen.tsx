@@ -5,29 +5,14 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { createOrderAction, logoutAction } from "@/lib/actions";
 import { money, num, weight as fmtWeight } from "@/lib/money";
 import type {
-  Extra, Flavor, LowStockRow, PaymentMethod, Receipt, Role, Variant, VariantKind,
+  Extra, Flavor, LowStockRow, PaymentMethod, Receipt, Role, Variant,
 } from "@/lib/types";
 import { linePrice, useCart } from "@/store/cart";
+import { PRODUCT_TYPES, PRODUCT_TYPE_ACCENT, PRODUCT_TYPE_LABEL, productType } from "@/lib/catalog";
 import Keypad from "@/components/Keypad";
 import Modal from "@/components/Modal";
 import LowStockBadge from "@/components/LowStockBadge";
 import ReceiptSheet from "@/components/ReceiptSheet";
-
-const KIND_LABEL: Record<VariantKind, string> = {
-  scoop: "بالسكوب",
-  cup: "أكواب جاهزة",
-  weight: "بالوزن",
-  cone: "كون وبسكويت",
-};
-
-const KIND_ORDER: VariantKind[] = ["scoop", "cup", "weight", "cone"];
-
-const KIND_ACCENT: Record<VariantKind, string> = {
-  scoop: "border-s-berry",
-  cup: "border-s-mint",
-  weight: "border-s-amber-500",
-  cone: "border-s-choco",
-};
 
 type Settings = {
   shop_name: string;
@@ -152,14 +137,14 @@ export default function PosScreen({
           <section className="space-y-3 lg:overflow-auto min-h-0 lg:pe-1">
             {/* الأصناف | product buttons — one compact grid, colour-coded by kind */}
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2">
-              {KIND_ORDER.flatMap((kind) => variants.filter((v) => v.kind === kind)).map((v) => (
+              {PRODUCT_TYPES.flatMap((t) => variants.filter((v) => productType(v) === t)).map((v) => (
                 <button
                   key={v.id}
                   type="button"
                   onClick={() => cart.startLine(v)}
-                  className={`btn px-3 py-2.5 bg-white border-2 border-black/5 border-s-[6px] ${KIND_ACCENT[v.kind]} text-choco text-start hover:bg-berry/5`}
+                  className={`btn px-3 py-2.5 bg-white border-2 border-black/5 border-s-[6px] ${PRODUCT_TYPE_ACCENT[productType(v)]} text-choco text-start hover:bg-berry/5`}
                 >
-                  <span className="block text-[10px] font-bold text-choco/40 leading-none mb-1">{KIND_LABEL[v.kind]}</span>
+                  <span className="block text-[10px] font-bold text-choco/40 leading-none mb-1">{PRODUCT_TYPE_LABEL[productType(v)]}</span>
                   <span className="block font-bold text-base leading-tight">{v.name_ar}</span>
                   <span className="block text-sm text-berry font-bold tnum mt-0.5">
                     {v.kind === "weight" ? `${money(v.price_per_kg)} / كجم` : money(v.price)}

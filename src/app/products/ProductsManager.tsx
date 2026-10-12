@@ -7,21 +7,17 @@ import {
 } from "@/lib/actions";
 import { money, num, weight } from "@/lib/money";
 import type {
-  AdminExtra, AdminFlavor, AdminPackaging, AdminVariant, PackagingKind, VariantKind,
+  AdminExtra, AdminFlavor, AdminPackaging, AdminVariant, PackagingKind,
 } from "@/lib/types";
+import {
+  PRODUCT_TYPES, PRODUCT_TYPE_LABEL, productType, toKindAndCategory, type ProductType,
+} from "@/lib/catalog";
 import { Field, FormShell, NumberInput, inputCls, str, useSave } from "@/components/form";
-
-const KIND_LABEL: Record<VariantKind, string> = {
-  scoop: "بالسكوب",
-  cup: "كوب جاهز",
-  weight: "بالوزن",
-  cone: "كون / بسكويت",
-};
 
 const PACK_LABEL: Record<PackagingKind, string> = {
   cup: "كوب",
   cone: "كون",
-  spoon: "ملعقة",
+  spoon: "ملعقة / شفاطة",
   biscuit: "بسكويت",
   bag: "كيس",
 };
@@ -75,7 +71,7 @@ export default function ProductsManager({
   }
 
   const addLabel: Record<Tab, string> = {
-    variants: "صنف جديد",
+    variants: "صنف جديد / ميلك شيك",
     flavors: "نكهة جديدة",
     extras: "إضافة جديدة",
     packaging: "عبوة جديدة",
@@ -119,7 +115,7 @@ export default function ProductsManager({
                 key={v.id}
                 active={v.is_active}
                 title={v.name_ar}
-                badge={KIND_LABEL[v.kind]}
+                badge={PRODUCT_TYPE_LABEL[productType(v)]}
                 detail={
                   v.kind === "weight"
                     ? `${money(v.price_per_kg)} / كجم · ${packName(v.packaging_id) ?? "بدون عبوة"}`
@@ -288,7 +284,7 @@ function VariantForm({
     containers.find((p) => kinds.includes(p.kind) && p.is_active)?.id ?? "";
 
   const [name, setName] = useState(row?.name_ar ?? "");
-  const [kind, setKind] = useState<VariantKind>(row?.kind ?? "scoop");
+  const [type, setType] = useState<ProductType>(row ? productType(row) : "scoop");
   const [price, setPrice] = useState(str(row?.price));
   const [pricePerKg, setPricePerKg] = useState(str(row?.price_per_kg));
   const [scoops, setScoops] = useState(str(row?.scoops, "1"));
@@ -301,23 +297,31 @@ function VariantForm({
   const { pending, error, save } = useSave(onClose);
 
   // تغيير النوع لصنف جديد يقترح العبوة المناسبة | sensible packaging per type
-  function pickKind(k: VariantKind) {
-    setKind(k);
+  function pickType(t: ProductType) {
+    setType(t);
     if (row) return;
-    if (k === "cone") {
+    if (t === "cone") {
       setPackId(firstOf(["cone", "biscuit"]));
       setSpoonId("");
-    } else if (k === "weight") {
+    } else if (t === "weight") {
       setPackId(firstOf(["bag"]));
       setSpoonId("");
       setMaxFlavors("4");
+    } else if (t === "shake") {
+      // prefer the milkshake cup and a straw when they exist
+      const shakeCup = containers.find((p) => p.is_active && p.name_ar.includes("شيك"));
+      const straw = spoons.find((p) => p.is_active && p.name_ar.includes("شفاط"));
+      setPackId(shakeCup?.id ?? firstOf(["cup"]));
+      setSpoonId(straw?.id ?? spoons[0]?.id ?? "");
+      setScoops("3");
+      setMaxFlavors("2");
     } else {
       setPackId(firstOf(["cup"]));
       setSpoonId(spoons[0]?.id ?? "");
     }
   }
 
-  const isWeight = kind === "weight";
+  const isWeight = type === "weight";
   const contentGrams = isWeight ? null : Number(scoops || 0) * Number(grams || 0);
   const deducts = [
     isWeight ? "الوزن المُدخل من النكهات" : `${num(contentGrams)} جرام من النكهات`,
@@ -336,7 +340,7 @@ function VariantForm({
           saveVariantAction({
             id: row?.id,
             name_ar: name,
-            kind,
+            ...toKindAndCategory(type),
             price: isWeight ? null : Number(price),
             price_per_kg: isWeight ? Number(pricePerKg) : null,
             scoops: isWeight ? null : Number(scoops),
@@ -355,17 +359,17 @@ function VariantForm({
       </Field>
 
       <Field label="النوع">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {(Object.keys(KIND_LABEL) as VariantKind[]).map((k) => (
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+          {PRODUCT_TYPES.map((t) => (
             <button
-              key={k}
+              key={t}
               type="button"
-              onClick={() => pickKind(k)}
+              onClick={() => pickType(t)}
               className={`btn py-2.5 text-sm border-2 ${
-                kind === k ? "border-berry bg-berry/10 text-berry" : "border-black/10 bg-cream text-choco/70"
+                type === t ? "border-berry bg-berry/10 text-berry" : "border-black/10 bg-cream text-choco/70"
               }`}
             >
-              {KIND_LABEL[k]}
+              {PRODUCT_TYPE_LABEL[t]}
             </button>
           ))}
         </div>
@@ -381,7 +385,7 @@ function VariantForm({
             <Field label="السعر (ج.س)">
               <NumberInput value={price} onChange={setPrice} />
             </Field>
-            <Field label="عدد السكوبات" hint="تحدد كمية الآيس كريم المخصومة">
+            <Field label="عدد السكوبات" hint={type === "shake" ? "كمية الآيس كريم في الكوب" : "تحدد كمية الآيس كريم المخصومة"}>
               <NumberInput value={scoops} onChange={setScoops} step="1" />
             </Field>
             <Field label="جرام السكوب الواحد">
@@ -395,7 +399,7 @@ function VariantForm({
       </div>
 
       <div className="grid sm:grid-cols-3 gap-3">
-        <Field label="العبوة (كوب / كون / كيس)">
+        <Field label={type === "shake" ? "كوب الميلك شيك" : "العبوة (كوب / كون / كيس)"}>
           <select value={packId} onChange={(e) => setPackId(e.target.value)} className={inputCls}>
             <option value="">بدون</option>
             {containers.map((p) => (
@@ -405,7 +409,7 @@ function VariantForm({
             ))}
           </select>
         </Field>
-        <Field label="ملعقة">
+        <Field label={type === "shake" ? "شفاطة" : "ملعقة"}>
           <select value={spoonId} onChange={(e) => setSpoonId(e.target.value)} className={inputCls}>
             <option value="">بدون</option>
             {spoons.map((p) => (

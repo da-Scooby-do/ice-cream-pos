@@ -160,6 +160,8 @@ export async function voidOrderAction(
     if (error) throw new Error(error.message);
 
     revalidatePath("/reports");
+    revalidatePath("/sales");
+    revalidatePath("/inventory");
     return { ok: true, data: null };
   } catch (e) {
     return fail(e);
@@ -269,6 +271,7 @@ export type VariantInput = {
   id?: string;
   name_ar: string;
   kind: (typeof KINDS)[number];
+  category?: "icecream" | "shake";
   price?: number | null;
   price_per_kg?: number | null;
   scoops?: number | null;
@@ -284,11 +287,16 @@ export async function saveVariantAction(input: VariantInput): Promise<ActionResu
   try {
     await requireManager();
     if (!KINDS.includes(input.kind)) throw new Error("نوع الصنف غير صحيح");
+    const category = input.category ?? "icecream";
+    if (category !== "icecream" && category !== "shake") throw new Error("نوع الصنف غير صحيح");
+    // a milkshake is always a fixed-price cup (DB check: product_variants_shake_is_cup)
+    if (category === "shake" && input.kind !== "cup") throw new Error("الميلك شيك يُباع بسعر ثابت للحجم");
 
     const isWeight = input.kind === "weight";
     const row = {
       name_ar: cleanName(input.name_ar),
       kind: input.kind,
+      category,
       // the price_present check needs exactly the right price column
       price: isWeight ? null : numberIn(input.price, "السعر", 0, 100_000_000),
       price_per_kg: isWeight ? numberIn(input.price_per_kg, "سعر الكيلو", 0, 100_000_000) : null,

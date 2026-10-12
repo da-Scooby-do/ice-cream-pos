@@ -1,5 +1,6 @@
 export type Role = "cashier" | "manager";
 export type VariantKind = "scoop" | "cup" | "weight" | "cone";
+export type VariantCategory = "icecream" | "shake";
 export type PaymentMethod = "cash" | "card" | "wallet";
 
 export type Staff = {
@@ -20,6 +21,7 @@ export type Variant = {
   id: string;
   name_ar: string;
   kind: VariantKind;
+  category: VariantCategory;
   scoops: number | null;
   grams_per_scoop: number | null;
   price: number | null;

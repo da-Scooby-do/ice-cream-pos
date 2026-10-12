@@ -17,7 +17,7 @@ An Arabic, right-to-left point-of-sale and inventory system for a single ice cre
 | **دخول بالرقم السري** | Staff type only their 4–6 digit PIN — no names are shown on the login screen; the PIN identifies the person, so every PIN must be unique. After 8 wrong PINs from one device the login locks for 10 minutes. |
 | **فتح الوردية** | Enter the opening cash in the drawer. Only one shift can be open at a time. |
 | **البيع** | Product → flavors → extras (optional) → **Enter, Enter** → receipt prints. |
-| **أنواع الأصناف** | By scoop (1/2/3) · fixed cups (S/M/L) · by weight (g/kg) · cone/biscuit. |
+| **أنواع الأصناف** | By scoop (1/2/3) · fixed cups (S/M/L) · by weight (g/kg) · cone/biscuit · milkshakes. |
 | **خصم المخزون تلقائياً** | Every sale deducts the cup/cone, the spoon, ~60 g per scoop of each flavor (or the exact weight), and each extra. |
 | **تنبيه النقص** | A red badge on the counter screen when any flavor, cup, or extra drops below its threshold. |
 | **تقفيل الوردية** | Count the drawer → see cash vs card, expected vs counted, **short / over** → prints the Z-report. |
@@ -25,6 +25,8 @@ An Arabic, right-to-left point-of-sale and inventory system for a single ice cre
 | **إدارة الأصناف** | The manager adds and edits products (type, price, scoops, max flavors, which cup/cone/spoon it uses), flavors (name, button colour), extras, and cups/cones. Items are hidden rather than deleted, so old receipts stay intact. |
 | **الموظفون** | The manager adds cashiers and managers, renames them, resets PINs, suspends or deletes accounts. Changes apply on the next click. Deleted staff vanish from the list and login screen but past receipts keep their name. A manager can't demote, suspend or delete themselves, and the last manager can't be removed. |
 | **الإعدادات** | Shop name, phone, address and receipt footer (multi-line), with a live receipt preview. |
+| **سجل المبيعات** | Every sale by date (today / yesterday / 7 days / this month / any range), cashier, payment and status, with period totals; tap a sale to see its items, flavors and extras, or cancel it. |
+| **ميلك شيك** | Milkshakes in their own section: fixed price per size; each one deducts its ice cream (scoops × grams), a shake cup and a straw. Managed like any other product. |
 
 ## الأمان | Security
 
@@ -47,6 +49,7 @@ Run these in the Supabase **SQL Editor**, in order:
 3. `supabase/migrations/0003_staff_admin.sql` and `0004_staff_archive.sql` — staff management
 4. `0006_pin_only_login.sql` — PIN-only login, unique PINs, wrong-guess lockout
    `0007_adjust_stock.sql` — atomic stock delivery / stock-count changes
+   `0008_shakes_and_sales.sql` — milkshake category + sales-history totals
 5. *(optional)* `0005_staff_name_reuse.sql` — lets a deleted person's name be reused
 6. `supabase/seed.sql` — starting flavors, cups, extras, prices, and two users
 
@@ -124,6 +127,7 @@ src/
   app/pos         the counter screen (product → flavors → extras → pay)
   app/close       close shift + Z-report
   app/reports     manager dashboard
+  app/sales       sales history with filters and period totals
   app/products    add / edit products, flavors, extras, packaging
   app/inventory   stock: «+ توريد» adds a delivery, «تعيين» sets the counted amount
   app/staff       add / edit / delete cashiers and managers
