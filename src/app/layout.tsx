@@ -1,34 +1,23 @@
 import type { Metadata, Viewport } from "next";
-import { Cairo } from "next/font/google";
+import "@fontsource-variable/readex-pro/wght.css";
 import "./globals.css";
 
-const cairo = Cairo({
-  subsets: ["arabic", "latin"],
-  weight: ["400", "600", "700", "800"],
-  display: "swap",
-  variable: "--font-arabic",
-});
-
 export const metadata: Metadata = {
-  title: "كاشير الآيس كريم",
-  description: "نظام كاشير ومخزون لمحل الآيس كريم",
+  title: "JAC ICE",
+  description: "نظام كاشير ومخزون JAC ICE",
 };
 
-// شاشة الكاشير لا تتكبّر ولا تتصغّر بالخطأ | lock zoom on the counter screen
+// شاشة الكاشير لا تتكبّر ولا تتصغّر بالخطأ | no accidental zoom on the counter
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
-  themeColor: "#D6336C",
+  themeColor: "#00ADEF",
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ar" dir="rtl" className={cairo.variable}>
+    <html lang="ar" dir="rtl">
       <body>{children}</body>
     </html>
   );

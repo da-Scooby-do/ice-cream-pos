@@ -1,142 +1,114 @@
-# 🍦 كاشير الآيس كريم — Ice Cream POS
+# 🍦 JAC ICE POS — برنامج كاشير ومخزون
 
-نظام كاشير ومخزون لمحل آيس كريم واحد، بالعربي، بالجنيه السوداني (SDG)،
-مصمم لجهاز ThinkPad وطابعة Xprinter حرارية 80 ملم.
+برنامج كاشير ومخزون لمحل **JAC ICE** للآيس كريم، بالعربي وبالجنيه السوداني، **يعمل على اللابتوب بدون إنترنت**،
+مع طابعة Xprinter حرارية 80 ملم، ونسخة سحابية يرى منها صاحب المحل التقارير على جواله.
 
-An Arabic, right-to-left point-of-sale and inventory system for a single ice cream shop.
-**Next.js 15 · Tailwind · Zustand · Supabase (Postgres) · Vercel.**
-
-🌐 **Live:** https://ice-cream-pos.vercel.app
-
----
-
-## ما يفعله النظام | What it does
+An Arabic, offline-first point-of-sale and inventory **desktop app** for a single ice cream shop
+(Windows laptop + 80mm thermal printer), with a cloud copy for backups and the owner's phone.
 
 | | |
 |---|---|
-| **دخول بالرقم السري** | Staff type only their 4–6 digit PIN — no names are shown on the login screen; the PIN identifies the person, so every PIN must be unique. After 8 wrong PINs from one device the login locks for 10 minutes. |
-| **فتح الوردية** | Enter the opening cash in the drawer. Only one shift can be open at a time. |
-| **البيع** | Product → flavors → extras (optional) → **Enter, Enter** → receipt prints. |
-| **أنواع الأصناف** | By scoop (1/2/3) · fixed cups (S/M/L) · by weight (g/kg) · cone/biscuit · milkshakes. |
-| **خصم المخزون تلقائياً** | Every sale deducts the cup/cone, the spoon, ~60 g per scoop of each flavor (or the exact weight), and each extra. |
-| **تنبيه النقص** | A red badge on the counter screen when any flavor, cup, or extra drops below its threshold. |
-| **تقفيل الوردية** | Count the drawer → see cash vs card, expected vs counted, **short / over** → prints the Z-report. |
-| **لوحة المدير** | Live shift totals, daily sales, top flavors, low stock, void orders, restock — works on a phone. |
-| **إدارة الأصناف** | The manager adds and edits products (type, price, scoops, max flavors, which cup/cone/spoon it uses), flavors (name, button colour), extras, and cups/cones. Items are hidden rather than deleted, so old receipts stay intact. |
-| **الموظفون** | The manager adds cashiers and managers, renames them, resets PINs, suspends or deletes accounts. Changes apply on the next click. Deleted staff vanish from the list and login screen but past receipts keep their name. A manager can't demote, suspend or delete themselves, and the last manager can't be removed. |
-| **الإعدادات** | Shop name, phone, address and receipt footer (multi-line), with a live receipt preview. |
-| **سجل المبيعات** | Every sale by date (today / yesterday / 7 days / this month / any range), cashier, payment and status, with period totals; tap a sale to see its items, flavors and extras, or cancel it. |
-| **ميلك شيك** | Milkshakes in their own section: fixed price per size; each one deducts its ice cream (scoops × grams), a shake cup and a straw. Managed like any other product. |
-| **الحليب** | Milk is stock too (in litres on المخزون, with a low-stock alert). Each milkshake size uses a set amount (default 100 ml per scoop, editable per product); every sale deducts it and a cancelled sale returns it. |
-
-## الأمان | Security
-
-- The browser **never talks to the database**. All reads and writes go through Next.js Server Actions using the service-role key, which stays on the server.
-- Every table has Row Level Security on with no policies, and all functions and views are revoked from `public`/`anon`/`authenticated` — the public Supabase key can read and do **nothing**.
-- **Prices are recomputed in Postgres on every sale** from the price list. A tampered request cannot change what a customer pays.
-- Sessions are httpOnly cookies signed with HMAC-SHA256. PINs are stored bcrypt-hashed.
-- Voids are manager-only, require a reason, and return the stock they used. Every stock change is logged in `inventory_movements`.
+| ⬇️ **تنزيل البرنامج (ويندوز)** | [Releases → JAC-ICE-POS-Setup-x.y.z.exe](https://github.com/da-Scooby-do/ice-cream-pos/releases/latest) |
+| 📱 **تقارير الجوال** | https://ice-cream-pos.vercel.app |
 
 ---
 
-## التشغيل | Setup
+## ما الذي يفعله | What it does
 
-### 1. قاعدة البيانات | Database (Supabase)
-
-Run these in the Supabase **SQL Editor**, in order:
-
-1. `supabase/migrations/0001_init.sql` — tables
-2. `supabase/migrations/0002_functions.sql` — sales logic, shift close, reports, security
-3. `supabase/migrations/0003_staff_admin.sql` and `0004_staff_archive.sql` — staff management
-4. `0006_pin_only_login.sql` — PIN-only login, unique PINs, wrong-guess lockout
-   `0007_adjust_stock.sql` — atomic stock delivery / stock-count changes
-   `0008_shakes_and_sales.sql` — milkshake category + sales-history totals
-   `0009_milk_tracking.sql` — milk (ingredients) tracked in stock, deducted per milkshake
-5. *(optional)* `0005_staff_name_reuse.sql` — lets a deleted person's name be reused
-6. `supabase/seed.sql` — starting flavors, cups, extras, prices, and two users
-
-> ⚠️ **غيّر الأرقام السرية فوراً.** The seed creates `المدير` (PIN **1234**) and `كاشير 1` (PIN **1111**). With PIN-only login anyone who knows these defaults can sign in, so change them first. From SQL:
-> ```sql
-> select set_staff_pin((select id from staff where name = 'المدير'), '8642');
-> ```
-> Or simply log in as المدير and use **الموظفون** to change PINs and add cashiers.
-
-The seeded **prices are placeholders** — set the real ones from **الأصناف والأسعار** in the app.
-
-### 2. متغيرات البيئة | Environment variables
-
-Copy `.env.example` to `.env.local` (and add them in Vercel → Settings → Environment Variables):
-
-| Variable | Where to find it |
+| | |
 |---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase → Project Settings → API |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API Keys → **Secret key** (`sb_secret_…`) — never share it |
-| `SESSION_SECRET` | *optional* — if unset, derived from the Supabase secret key. Set it (`openssl rand -base64 32`) only if you want sessions independent of that key. |
+| **يعمل بدون إنترنت** | Everything (selling, printing, stock, reports) runs on the laptop with its own database. The internet is only used to copy data to the cloud and to download updates. |
+| **الدخول بالرقم السري** | PIN only — no names on the login screen. Every PIN is unique. |
+| **المدير والموظفون** | Two roles. The **admin** controls everything. A **staff** member can do only what the admin ticks: sell · void receipts · see sales history · see dashboard & statements · record expenses/income · receive stock · count/adjust stock · manage products & prices. Changes apply on the very next click. |
+| **ورديتان** | A day (صباحية) and a night (مسائية) shift — or just one. Each opens with the cash in the drawer. A night shift that runs past midnight belongs to the day it started. |
+| **البيع** | Product → size → flavors → extras → **Enter, Enter** → the receipt prints silently. Cash (with change) or bank transfer (بنكك). |
+| **الأصناف من الصفر** | The app starts empty; the admin adds flavors, cups/cones/spoons/milk, products with their sizes and prices, and what each sale uses up. Products sold by weight are supported. |
+| **خصم المخزون تلقائياً** | Each sale deducts scoops × grams from the chosen flavors (or the exact weight), plus the cup/cone/spoon/straw/milk set on that size, plus extras. Voids put it all back. |
+| **الإيرادات والمصروفات** | Two ledgers: income (sales + other income) and expenses (rent, electricity, ice, salaries…). Expenses can be added during or at the end of a shift, paid from the drawer or not. |
+| **كشف الوردية** | Closing a shift prints an 80mm statement: income, expenses, **net profit**, the cash-drawer check (short/over), items sold, and the whole day's totals when there were two shifts. |
+| **الكشف اليومي والشهري** | Daily and monthly statements on screen and on paper: every product × size sold, income by type, expenses by category, net profit, day-by-day table, flavor usage. |
+| **المخزون بالتاريخ** | Every delivery is logged with its date, quantity and (optional) cost — which is recorded as an expense automatically. The monthly ledger shows **opening + received − sold ± counted/wasted = closing** for every item. Low-stock alerts in red. |
+| **لوحة التحكم** | Best-selling products, most popular sizes, the busiest hours of the day, the busiest day of the week, daily revenue, flavor usage — for today / 7 days / this month / any range. |
+| **النسخ الاحتياطي** | Automatic full backup every 12 hours and after every shift close (kept in *Documents → JAC ICE Backups*, last 60), optionally mirrored to a USB stick; one-click restore from any backup file. |
+| **السحابة** | When online, every change is copied to Supabase (via the Vercel app) within a minute. A brand-new laptop can be **restored from the cloud** on its first start. |
+| **تقارير الجوال** | The owner signs in on his phone with his PIN and sees today, the dashboard, daily/monthly statements and stock — read-only. |
+| **التحديثات** | The app updates itself from GitHub Releases in the background and installs on the next restart. |
 
-### 3. التشغيل محلياً | Run locally
+---
+
+## التثبيت على اللابتوب | Installing on the laptop
+
+1. نزّل `JAC-ICE-POS-Setup-x.y.z.exe` من صفحة [Releases](https://github.com/da-Scooby-do/ice-cream-pos/releases/latest) وشغّله.
+   ويندوز قد يظهر «Windows protected your PC» لأن البرنامج غير موقّع بشهادة مدفوعة → **More info → Run anyway** (مرة واحدة).
+2. أول تشغيل: اختر **بداية جديدة** (اسم المحل + اسم المدير + رقم سري)، أو **من السحابة** / **من ملف** لاستعادة بيانات سابقة.
+3. **الأصناف**: أضف النكهات ← مواد المخزون (الأكواب، البسكويت، الملاعق، الحليب…) ← الأصناف وأحجامها وأسعارها.
+4. **الإعدادات ← الطابعة**: اختر طابعة Xprinter واضغط «طباعة فاتورة تجربة».
+   لفتح درج النقود تلقائياً: في خصائص الطابعة داخل ويندوز فعّل *Open cash drawer* بعد الطباعة.
+5. **الإعدادات ← النسخ الاحتياطي**: اختر فلاشة كمجلد إضافي (موصى به).
+6. **الموظفون**: أضف الكاشير وحدد صلاحياته.
+
+اختصارات: `Enter` الدفع · `Esc` مسح الطلب · `F11` ملء الشاشة · `F5` تحديث الصفحة.
+
+## ربط السحابة وتقارير الجوال | Cloud + phone (one time)
+
+1. Supabase → SQL Editor → run [`supabase/migrations/0010_cloud_sync.sql`](supabase/migrations/0010_cloud_sync.sql) (already applied on the live project).
+2. Vercel → Project → Settings → Environment Variables → add **`SYNC_TOKEN`** = a long random secret (20+ characters) → **Redeploy**.
+   (`NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are already set from v1.)
+3. On the laptop: **الإعدادات ← النسخة السحابية** → paste the same token → **ربط واختبار**. Everything is uploaded.
+4. The owner opens https://ice-cream-pos.vercel.app on his phone and signs in with his PIN
+   (admins, or staff with the *reports* permission).
+
+---
+
+## كيف بُني | How it is built
+
+```
+Electron (Windows app)
+ ├─ main process ── window, silent printing, file pickers, auto-update
+ └─ utility process ── Next.js 15 standalone server on 127.0.0.1
+                        └─ SQLite (node:sqlite, built into Electron's Node 24)
+                             └─ sync_outbox ──(when online)──▶ Vercel /api/sync ──▶ Supabase
+                                                                   │
+                                     owner's phone ◀── /m (read-only) ◀┘
+```
+
+- **One codebase, two modes.** `POS_RUNTIME=desktop` (set by Electron) → the full app on SQLite.
+  On Vercel → only the phone pages (`/m`) and the sync API.
+- **SQLite** in WAL mode with `synchronous=FULL`; every sale, its items and every stock movement
+  commit in one transaction. Prices are always recomputed on the server.
+- **Sync is one-way** (laptop → cloud), so there are no conflicts. Triggers queue every changed row;
+  a background job uploads them every minute and publishes ready-made report snapshots for the phone.
+- **Printing**: the slip is measured and printed silently at exactly 80 mm × its own length through
+  Electron's `webContents.print` — no browser dialog, no wasted paper.
+- **Security**: PINs are scrypt-hashed; sessions are HMAC-signed httpOnly cookies re-checked on every
+  request; every action checks the permission on the server; the local server listens on 127.0.0.1
+  only; the window can't navigate away from the app; the cloud endpoints need the sync token, and
+  the cloud is read-only.
+
+### Project layout
+
+| Path | |
+|---|---|
+| `electron/` | main process, preload bridge, splash |
+| `src/lib/db/` | SQLite connection + schema migrations |
+| `src/lib/server/` | business logic: sales, shifts, money, stock, catalog, staff, reports, backup, sync |
+| `src/actions/` | server actions (each checks the permission) |
+| `src/app/(desk)/` | laptop pages · `src/app/m/` phone pages · `src/app/api/sync/` cloud endpoints |
+| `src/components/slips.tsx` | the 80mm receipt / shift / day / month / stock slips |
+| `supabase/migrations/0010_cloud_sync.sql` | cloud tables (`legacy-v1/` = the old web-only version) |
+| `.github/workflows/desktop.yml` | builds, smoke-tests and publishes the Windows installer |
+
+### Development
 
 ```bash
 npm install
-npm run dev     # http://localhost:3000
+npm run dev:desktop          # the laptop app in a browser: http://localhost:3200 (data in .data/)
+npm run desktop:build        # production server for Electron
+npm run desktop:run          # the real desktop app
+npm run desktop:smoke        # boot + self-test, exits 0/1
+npx electron-builder --win   # Windows installer (on Windows; CI does this)
 ```
 
----
-
-## 🖨️ جهاز المحل | The shop's ThinkPad + Xprinter
-
-### Silent receipt printing
-
-1. Install the **Xprinter 80mm driver**, connect it by USB, and set it as the **default printer**.
-2. In the driver's printing preferences, set the paper to **80mm × receipt (continuous)**.
-3. Launch Chrome in kiosk-printing mode — `window.print()` then goes straight to the printer with **no dialog**:
-
-**Windows** — double-click `scripts/start-pos.bat` (it already points at the live app), or make a desktop shortcut with this target:
-
-```
-"C:\Program Files\Google\Chrome\Application\chrome.exe" --kiosk-printing --app=https://ice-cream-pos.vercel.app
-```
-
-**Linux** — `scripts/start-pos.sh`.
-
-> `--kiosk-printing` only takes effect if **every** Chrome window is closed first. If the print dialog still appears, close Chrome completely (check the system tray) and relaunch from the shortcut.
-
-### فتح درج النقدية | Opening the cash drawer
-
-The drawer plugs into the Xprinter's RJ11 port. A web page can't send the raw "kick" command, so the **printer driver** does it:
-Windows → *Printers & scanners* → Xprinter → *Printing preferences* (or *Printer properties → Device Settings*) → **Cash Drawer: open after printing**. The drawer then pops on every receipt.
-
-### Keyboard shortcuts at the counter
-
-| Key | Action |
-|---|---|
-| `Enter` | Open payment (when the order is complete) |
-| `Enter` again | Exact cash → save → print |
-| digits | Type the amount received / weight / PIN |
-| `Esc` | Clear the order / close a dialog |
-
----
-
-## هيكل المشروع | Project layout
-
-```
-supabase/
-  migrations/0001_init.sql        tables
-  migrations/0002_functions.sql   create_order, void_order, open/close_shift, views, security
-  seed.sql                        starting data
-src/
-  app/login       PIN login
-  app/shift       open shift
-  app/pos         the counter screen (product → flavors → extras → pay)
-  app/close       close shift + Z-report
-  app/reports     manager dashboard
-  app/sales       sales history with filters and period totals
-  app/products    add / edit products, flavors, extras, packaging
-  app/inventory   stock: «+ توريد» adds a delivery, «تعيين» sets the counted amount
-  app/staff       add / edit / delete cashiers and managers
-  app/settings    shop name, contact details, receipt footer
-  lib/actions.ts  server actions (all mutations)
-  lib/queries.ts  server reads
-  lib/session.ts  signed PIN session
-  store/cart.ts   Zustand cart
-  components/     Keypad, ReceiptSheet (80mm), ZReport, LowStockBadge
-```
+**Release:** bump `version` in `package.json`, commit, then push a tag `vX.Y.Z` —
+GitHub Actions builds the installer on Windows, smoke-tests it and publishes the release;
+installed apps pick it up automatically.

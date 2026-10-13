@@ -1,15 +1,17 @@
 import { redirect } from "next/navigation";
+import { navFor } from "@/lib/nav";
+import { IS_DESKTOP } from "@/lib/runtime";
+import { needsSetup } from "@/lib/server/shop";
 import { getSession } from "@/lib/session";
-import { getOpenShift } from "@/lib/queries";
 
-// الصفحة الرئيسية توجّه كل شخص للمكان الصحيح
-// Front door: the manager (dad, often on his phone) lands on reports;
-// a cashier goes to open a shift, then straight to the counter.
+export const dynamic = "force-dynamic";
+
+// البداية: كل شخص إلى أول صفحة مسموحة له | send everyone to their first page
 export default async function Home() {
-  const session = await getSession();
-  if (!session) redirect("/login");
-  if (session.role === "manager") redirect("/reports");
-
-  const shift = await getOpenShift();
-  redirect(shift ? "/pos" : "/shift");
+  if (!IS_DESKTOP) redirect("/m");
+  if (needsSetup()) redirect("/setup");
+  const s = await getSession();
+  if (!s) redirect("/login");
+  const first = navFor(s)[0];
+  redirect(first?.href ?? "/login");
 }

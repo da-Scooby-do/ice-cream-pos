@@ -1,7 +1,11 @@
 node_modules/
 .next/
+.next-*/
 out/
-build/
+# electron-builder output (installers)
+dist/
+# local development database
+.data/
 .DS_Store
 *.pem
 .env

@@ -1,8 +1,9 @@
 "use client";
 
 // لوحة أرقام كبيرة | a big numeric keypad.
-// Works with a mouse, a touchscreen, or the ThinkPad's number row —
-// physical keys are bound too so a fast cashier never needs the mouse.
+// Works with a mouse, a touchscreen, or the laptop keyboard — physical keys
+// are bound too, so a fast cashier never needs the mouse.
+import { Delete } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef } from "react";
 
 export default function Keypad({
@@ -13,17 +14,22 @@ export default function Keypad({
   allowDecimal = false,
   enterLabel = "تم",
   enterDisabled = false,
+  compact = false,
+  listen = true,
 }: {
   value: string;
   onChange: (next: string) => void;
   onEnter?: () => void;
   maxLength?: number;
   allowDecimal?: boolean;
-  enterLabel?: string;
+  enterLabel?: React.ReactNode;
   enterDisabled?: boolean;
+  compact?: boolean;
+  /** bind the physical keyboard (turn off when a text input has focus) */
+  listen?: boolean;
 }) {
-  // The latest value, updated on every key — not only when React
-  // re-renders — so fast typing (or a fast cashier) never drops a digit.
+  // The latest value, updated on every key — not only when React re-renders —
+  // so fast typing never drops a digit.
   const latest = useRef(value);
   useLayoutEffect(() => {
     latest.current = value;
@@ -42,22 +48,20 @@ export default function Keypad({
       return;
     }
     if (cur.length >= maxLength) return;
-    // no leading zeros
     emit(cur === "0" ? ch : cur + ch);
   }
 
-  // اختصارات الكيبورد | physical keyboard shortcuts
   useEffect(() => {
+    if (!listen) return;
     function onKey(e: KeyboardEvent) {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
       if (e.key >= "0" && e.key <= "9") {
         e.preventDefault();
         push(e.key);
       } else if (e.key === "Backspace") {
         e.preventDefault();
         emit(latest.current.slice(0, -1));
-      } else if (e.key === "Escape") {
-        e.preventDefault();
-        emit("");
       } else if (e.key === "." || e.key === ",") {
         e.preventDefault();
         push(".");
@@ -70,62 +74,43 @@ export default function Keypad({
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
+  const pad = compact ? "py-3 text-xl" : "py-4 text-2xl";
+  const key = `btn ${pad} bg-ink-50 hover:bg-sky-50 ring-1 ring-ink-100 text-ink tnum font-semibold`;
 
   return (
-    <div className="grid grid-cols-3 gap-2">
-      {keys.map((k) => (
-        <button
-          key={k}
-          type="button"
-          onClick={() => push(k)}
-          className="btn py-5 text-2xl bg-cream border-2 border-black/10 text-choco tnum hover:bg-berry/5"
-        >
+    <div className="grid grid-cols-3 gap-2" dir="ltr">
+      {["7", "8", "9", "4", "5", "6", "1", "2", "3"].map((k) => (
+        <button key={k} type="button" onClick={() => push(k)} className={key}>
           {k}
         </button>
       ))}
-
-      <button
-        type="button"
-        onClick={() => emit(latest.current.slice(0, -1))}
-        className="btn py-5 text-xl bg-amber-50 border-2 border-amber-200 text-amber-700"
-        aria-label="حذف"
-      >
-        ⌫
-      </button>
-
-      <button
-        type="button"
-        onClick={() => push("0")}
-        className="btn py-5 text-2xl bg-cream border-2 border-black/10 text-choco tnum hover:bg-berry/5"
-      >
-        0
-      </button>
-
       {allowDecimal ? (
-        <button
-          type="button"
-          onClick={() => push(".")}
-          className="btn py-5 text-2xl bg-cream border-2 border-black/10 text-choco"
-        >
+        <button type="button" onClick={() => push(".")} className={key}>
           .
         </button>
       ) : (
-        <button
-          type="button"
-          onClick={() => emit("")}
-          className="btn py-5 text-base bg-cream border-2 border-black/10 text-choco/60"
-        >
+        <button type="button" onClick={() => emit("")} className={`${key} !text-sm text-ink-500`}>
           مسح
         </button>
       )}
-
+      <button type="button" onClick={() => push("0")} className={key}>
+        0
+      </button>
+      <button
+        type="button"
+        onClick={() => emit(latest.current.slice(0, -1))}
+        className={`btn ${pad} bg-cone/15 text-ink ring-1 ring-cone/30 hover:bg-cone/25`}
+        aria-label="حذف"
+      >
+        <Delete size={22} />
+      </button>
       {onEnter && (
         <button
           type="button"
           onClick={onEnter}
           disabled={enterDisabled}
-          className="btn col-span-3 py-5 text-xl bg-mint text-white"
+          className={`btn-go col-span-3 ${compact ? "py-3.5 text-base" : "py-4 text-lg"}`}
+          dir="rtl"
         >
           {enterLabel}
         </button>

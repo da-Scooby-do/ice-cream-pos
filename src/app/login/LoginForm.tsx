@@ -2,11 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { loginAction } from "@/lib/actions";
+import { loginAction } from "@/actions/auth";
 import Keypad from "@/components/Keypad";
 
 // الدخول بالرقم السري فقط — لا تظهر أسماء الموظفين
-// PIN-only login: no staff names are shown; the PIN identifies the person.
 export default function LoginForm() {
   const router = useRouter();
   const [pin, setPin] = useState("");
@@ -18,7 +17,8 @@ export default function LoginForm() {
     start(async () => {
       const res = await loginAction(pin);
       if (res.ok) {
-        router.replace("/");
+        router.replace(res.data.home);
+        router.refresh();
       } else {
         setError(res.error);
         setPin("");
@@ -27,16 +27,18 @@ export default function LoginForm() {
   }
 
   return (
-    <div className="bg-white rounded-3xl shadow-sm p-6 space-y-5">
+    <div className="card p-5 space-y-4">
       <div
         dir="ltr"
         aria-label="الرقم السري"
-        className="h-20 rounded-2xl bg-cream border-2 border-black/10 flex items-center justify-center gap-3"
+        className={`h-16 rounded-2xl bg-ink-50 ring-1 flex items-center justify-center gap-3 transition ${
+          error ? "ring-red-300 bg-red-50" : "ring-ink-100"
+        }`}
       >
         {Array.from({ length: Math.max(4, pin.length) }, (_, i) => (
           <span
             key={i}
-            className={`w-4 h-4 rounded-full ${i < pin.length ? "bg-choco" : "bg-choco/15"}`}
+            className={`w-4 h-4 rounded-full transition ${i < pin.length ? "bg-ink scale-110" : "bg-ink-200"}`}
           />
         ))}
       </div>
@@ -47,17 +49,13 @@ export default function LoginForm() {
           setError(null);
           setPin(v);
         }}
-        maxLength={6}
+        maxLength={8}
         onEnter={submit}
         enterLabel={pending ? "جاري الدخول…" : "دخول"}
         enterDisabled={pending || pin.length < 4}
       />
 
-      {error && (
-        <p className="text-center text-sm font-bold text-red-600 bg-red-50 rounded-xl py-3">
-          {error}
-        </p>
-      )}
+      {error && <p className="text-center text-sm font-semibold text-red-700 bg-red-50 rounded-xl py-2.5">{error}</p>}
     </div>
   );
 }

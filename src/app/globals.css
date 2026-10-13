@@ -2,36 +2,83 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --font-arabic: "Cairo", Tahoma, Arial, sans-serif;
-}
-
 html {
   -webkit-text-size-adjust: 100%;
 }
 
 body {
-  background: #FFF9F0;
-  color: #2A1F18;
-  font-family: var(--font-arabic);
-  /* لا تحديد نص بالخطأ على شاشة اللمس | no accidental text selection */
+  @apply bg-paper text-ink antialiased;
+  font-family: "Readex Pro Variable", "Readex Pro", Tahoma, Arial, sans-serif;
+  font-weight: 400;
+  /* لا تحديد نص بالخطأ على شاشة الكاشير | no accidental text selection */
   -webkit-user-select: none;
   user-select: none;
 }
 
-/* الأرقام دائماً بالإنجليزية وبعرض ثابت | tabular Latin digits for money */
+input,
+textarea,
+select {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* أرقام بعرض ثابت للمبالغ | tabular digits for money */
 .tnum {
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
 }
 
-/* أزرار كبيرة للكاشير | big counter buttons */
-.btn {
-  @apply rounded-2xl font-bold transition-transform active:scale-[0.97] disabled:opacity-40 disabled:active:scale-100;
+:focus-visible {
+  outline: 3px solid theme("colors.sky.300");
+  outline-offset: 2px;
 }
 
-.btn-lg {
-  @apply btn text-xl px-6 py-5 shadow-sm;
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-2xl font-semibold transition
+      active:scale-[0.97] disabled:opacity-40 disabled:active:scale-100 disabled:cursor-not-allowed select-none;
+  }
+  /* الأزرار حسب الأهمية | buttons by importance */
+  .btn-go {
+    @apply btn bg-lemon text-ink hover:bg-lemon-600 shadow-sm;
+  }
+  .btn-dark {
+    @apply btn bg-ink text-white hover:bg-ink-700;
+  }
+  .btn-sky {
+    @apply btn bg-sky text-ink hover:bg-sky-600;
+  }
+  .btn-soft {
+    @apply btn bg-white text-ink ring-1 ring-ink-200 hover:bg-ink-50;
+  }
+  .btn-danger {
+    @apply btn bg-red-600 text-white hover:bg-red-700;
+  }
+  .btn-ghost {
+    @apply btn text-ink-500 hover:bg-ink-100;
+  }
+  .card {
+    @apply bg-white rounded-3xl shadow-card;
+  }
+  .input {
+    @apply w-full rounded-xl border-2 border-ink-100 bg-white px-3 py-2.5 text-ink placeholder:text-ink-300
+      focus:border-sky outline-none transition;
+  }
+  .label {
+    @apply text-xs font-semibold text-ink-500;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold;
+  }
+  .table-x {
+    @apply w-full text-sm;
+  }
+  .table-x th {
+    @apply text-start text-xs font-semibold text-ink-400 px-3 py-2 border-b border-ink-100 whitespace-nowrap;
+  }
+  .table-x td {
+    @apply px-3 py-2.5 border-b border-ink-50;
+  }
 }
 
 input[type="number"]::-webkit-outer-spin-button,
@@ -39,84 +86,148 @@ input[type="number"]::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
-input[type="number"] {
-  -moz-appearance: textfield;
+
+/* شريط تمرير رفيع | slim scrollbars */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: theme("colors.ink.200");
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
 }
 
 /* =====================================================================
-   طباعة فاتورة 80 ملم | 80mm thermal receipt printing
-   Designed for the Xprinter 80mm over USB with Chrome launched as:
-     chrome --kiosk-printing --app=http://localhost:3000/pos
-   kiosk-printing fires window.print() straight to the default printer
-   with no dialog, so the slip appears the moment the sale is confirmed.
+   الطباعة الحرارية 80 ملم | 80mm thermal printing
+   A slip lives in a .print-root portal on <body>. On screen it is hidden;
+   when printing, everything else is hidden. The desktop app measures the
+   slip and prints a page exactly that long, so the roll is never wasted.
    ===================================================================== */
 @media screen {
-  .receipt-sheet {
+  .print-root {
     display: none;
+  }
+  .print-root.measuring {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: -10000px;
+    visibility: hidden;
   }
 }
 
 @media print {
   @page {
-    size: 80mm auto;
+    size: 80mm 200mm;
     margin: 0;
   }
-
   html,
   body {
-    width: 80mm;
-    background: #fff;
-    margin: 0;
-    padding: 0;
+    background: #fff !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
-
-  /* اطبع الفاتورة فقط | hide the app, print only the slip */
-  body > *:not(.receipt-sheet) {
+  body > *:not(.print-root) {
     display: none !important;
   }
-
-  .receipt-sheet {
+  .print-root {
     display: block !important;
-    width: 80mm;
-    padding: 2mm 3mm 6mm;
-    color: #000;
-    font-family: var(--font-arabic);
-    font-size: 12px;
-    line-height: 1.5;
   }
+}
 
-  .receipt-sheet .r-title {
-    font-size: 17px;
-    font-weight: 800;
-    text-align: center;
-  }
-
-  .receipt-sheet .r-sub {
-    text-align: center;
-    font-size: 11px;
-  }
-
-  .receipt-sheet .r-rule {
-    border-top: 1px dashed #000;
-    margin: 2mm 0;
-  }
-
-  .receipt-sheet .r-row {
-    display: flex;
-    justify-content: space-between;
-    gap: 2mm;
-  }
-
-  .receipt-sheet .r-total {
-    font-size: 15px;
-    font-weight: 800;
-  }
-
-  .receipt-sheet .r-meta {
-    font-size: 10px;
-  }
-
-  .receipt-sheet .r-center {
-    text-align: center;
-  }
+.slip {
+  width: 72mm;
+  margin: 0 auto;
+  padding: 2mm 0 4mm;
+  color: #000;
+  background: #fff;
+  font-family: "Readex Pro Variable", "Readex Pro", Tahoma, Arial, sans-serif;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.45;
+  direction: rtl;
+}
+.slip .s-logo {
+  display: block;
+  width: 30mm;
+  margin: 0 auto 1mm;
+}
+.slip .s-title {
+  font-size: 16px;
+  font-weight: 700;
+  text-align: center;
+}
+.slip .s-sub {
+  text-align: center;
+  font-size: 10.5px;
+}
+.slip .s-head {
+  margin: 1.5mm 0 1mm;
+  padding: 0.8mm 0;
+  text-align: center;
+  font-weight: 700;
+  font-size: 12.5px;
+  border-top: 1.5px solid #000;
+  border-bottom: 1.5px solid #000;
+}
+.slip .s-sec {
+  margin-top: 1.5mm;
+  font-weight: 700;
+  font-size: 12px;
+}
+.slip .s-rule {
+  border-top: 1px dashed #000;
+  margin: 1.5mm 0;
+}
+.slip .s-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 2mm;
+}
+.slip .s-row > :last-child {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.slip .s-total {
+  font-size: 14px;
+  font-weight: 700;
+}
+.slip .s-big {
+  font-size: 16px;
+  font-weight: 700;
+}
+.slip .s-small {
+  font-size: 10px;
+}
+.slip .s-center {
+  text-align: center;
+}
+.slip .s-box {
+  border: 1.5px solid #000;
+  border-radius: 2mm;
+  padding: 1mm 2mm;
+  margin: 1.5mm 0;
+}
+.slip table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10.5px;
+}
+.slip th {
+  text-align: start;
+  font-weight: 700;
+  border-bottom: 1px solid #000;
+  padding: 0.4mm 0;
+}
+.slip td {
+  padding: 0.4mm 0;
+  vertical-align: top;
+}
+.slip td.n,
+.slip th.n {
+  text-align: end;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }

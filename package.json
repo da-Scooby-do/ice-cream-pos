@@ -1,33 +1,48 @@
 {
-  "name": "ice-cream-pos",
-  "version": "1.0.0",
+  "name": "jac-ice-pos",
+  "productName": "JAC ICE POS",
+  "version": "2.0.0",
   "private": true,
-  "description": "\u0646\u0638\u0627\u0645 \u0643\u0627\u0634\u064a\u0631 \u0648\u0645\u062e\u0632\u0648\u0646 \u0644\u0645\u062d\u0644 \u0622\u064a\u0633 \u0643\u0631\u064a\u0645 \u2014 Arabic RTL POS for an ice cream shop",
+  "description": "JAC ICE — نظام كاشير ومخزون لمحل آيس كريم (برنامج لابتوب يعمل بدون إنترنت)",
+  "author": "JAC ICE",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "next dev",
+    "dev:desktop": "cross-env POS_RUNTIME=desktop POS_DATA_DIR=.data next dev -p 3200",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "desktop:build": "cross-env BUILD_TARGET=desktop next build && node scripts/prepare-desktop.mjs",
+    "desktop:run": "electron .",
+    "desktop:smoke": "electron . --smoke-test",
+    "desktop:dist": "electron-builder --win nsis --publish never",
+    "desktop:release": "electron-builder --win nsis --publish always"
   },
   "dependencies": {
-    "@supabase/supabase-js": "2.117.2",
-    "next": "15.5.27",
-    "react": "19.1.9",
-    "react-dom": "19.1.9",
-    "zustand": "5.0.2"
+    "electron-updater": "6.8.9"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
-    "@types/node": "22.10.2",
+    "@fontsource-variable/readex-pro": "5.3.0",
+    "@supabase/supabase-js": "2.117.2",
+    "@types/node": "24.19.0",
     "@types/react": "19.0.2",
     "@types/react-dom": "19.0.2",
     "autoprefixer": "10.4.20",
+    "cross-env": "7.0.3",
+    "electron": "44.4.5",
+    "electron-builder": "26.15.3",
     "eslint": "9.17.0",
     "eslint-config-next": "15.5.27",
+    "lucide-react": "1.48.0",
+    "next": "15.5.27",
     "postcss": "8.5.29",
+    "react": "19.1.9",
+    "react-dom": "19.1.9",
     "tailwindcss": "3.4.17",
-    "typescript": "5.7.2"
+    "typescript": "5.7.2",
+    "zustand": "5.0.2"
   },
   "overrides": {
     "postcss": "8.5.29"

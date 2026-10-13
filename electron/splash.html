@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline'; img-src 'self'" />
+    <title>JAC ICE</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #00ADEF; font-family: Tahoma, Arial, sans-serif; color: #282828; }
+      body { display: grid; place-items: center; }
+      .box { text-align: center; }
+      img { width: 140px; height: 140px; border-radius: 50%; box-shadow: 0 12px 40px rgba(0,0,0,.18); animation: pop .6s ease-out both; }
+      p { margin-top: 18px; font-size: 18px; font-weight: 700; }
+      .dots span { display: inline-block; width: 8px; height: 8px; margin: 0 3px; border-radius: 50%; background: #282828; opacity: .25; animation: blink 1.2s infinite; }
+      .dots span:nth-child(2) { animation-delay: .2s; } .dots span:nth-child(3) { animation-delay: .4s; }
+      @keyframes blink { 50% { opacity: 1; } }
+      @keyframes pop { from { transform: scale(.9); opacity: 0; } }
+    </style>
+  </head>
+  <body>
+    <div class="box">
+      <img src="icon.png" alt="JAC ICE" />
+      <p>جاري تشغيل البرنامج…</p>
+      <div class="dots"><span></span><span></span><span></span></div>
+    </div>
+  </body>
+</html>

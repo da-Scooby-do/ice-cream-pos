@@ -1,156 +1,128 @@
 "use client";
 
 import { create } from "zustand";
-import type { Extra, Flavor, Variant } from "@/lib/types";
-import type { OrderItemInput } from "@/lib/actions";
+import { round2 } from "@/lib/format";
+import type { Extra, OrderItemInput, Product, Size, StockItem } from "@/lib/types";
 
-// سلة الطلب | the active order.
-// Kept entirely in memory: a counter sale lives for seconds, and the
-// server recomputes every price from the database when it is submitted,
-// so nothing here is trusted for money.
+// سلة الطلب | the order being rung up. Lives in memory for seconds; the
+// server recomputes every price from the database when it is paid.
 
 export type CartLine = {
   uid: string;
-  variant: Variant;
+  product: Product;
+  size: Size | null;
   qty: number;
-  weightGrams: number | null;
-  flavors: { id: string; name_ar: string; color: string }[];
-  extras: { id: string; name_ar: string; price: number }[];
+  weight_g: number | null;
+  flavors: { id: string; name: string; color: string | null }[];
+  extras: { id: string; name: string; price: number }[];
 };
 
-/** سعر السطر | line price — display only; the server is authoritative. */
-export function linePrice(line: CartLine): number {
+export function maxFlavors(l: CartLine): number {
+  return l.product.pricing === "weight" ? l.product.max_flavors : (l.size?.scoops ?? 0);
+}
+
+export function linePrice(l: CartLine): number {
   const base =
-    line.variant.kind === "weight"
-      ? ((line.variant.price_per_kg ?? 0) * (line.weightGrams ?? 0)) / 1000
-      : line.variant.price ?? 0;
-  const extras = line.extras.reduce((s, e) => s + Number(e.price), 0);
-  return Math.round((base + extras) * line.qty * 100) / 100;
+    l.product.pricing === "weight"
+      ? ((l.product.price_per_kg ?? 0) * (l.weight_g ?? 0)) / 1000
+      : (l.size?.price ?? 0);
+  const extras = l.extras.reduce((s, e) => s + e.price, 0);
+  return round2((base + extras) * l.qty);
+}
+
+/** ما الذي ينقص هذا السطر؟ | what is this line still missing? */
+export function missing(l: CartLine): "size" | "weight" | "flavor" | null {
+  if (l.product.pricing === "size" && !l.size) return "size";
+  if (l.product.pricing === "weight" && !(l.weight_g && l.weight_g > 0)) return "weight";
+  if (maxFlavors(l) > 0 && l.flavors.length === 0) return "flavor";
+  return null;
 }
 
 type CartState = {
   lines: CartLine[];
   activeUid: string | null;
-
-  startLine: (variant: Variant) => void;
+  start: (p: Product) => void;
   setActive: (uid: string | null) => void;
-  toggleFlavor: (flavor: Flavor) => void;
-  toggleExtra: (extra: Extra) => void;
-  setWeight: (grams: number | null) => void;
+  setSize: (size: Size) => void;
+  setWeight: (g: number) => void;
+  toggleFlavor: (f: StockItem) => void;
+  toggleExtra: (x: Extra) => void;
   setQty: (uid: string, qty: number) => void;
-  removeLine: (uid: string) => void;
+  remove: (uid: string) => void;
   clear: () => void;
-
-  activeLine: () => CartLine | null;
-  subtotal: () => number;
-  toPayload: () => OrderItemInput[];
-  isReady: () => boolean;
 };
 
-const uid = () =>
-  typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random()}`;
+const uid = () => crypto.randomUUID();
 
-export const useCart = create<CartState>((set, get) => ({
+const patchActive = (s: CartState, fn: (l: CartLine) => CartLine) => ({
+  lines: s.lines.map((l) => (l.uid === s.activeUid ? fn(l) : l)),
+});
+
+export const useCart = create<CartState>((set) => ({
   lines: [],
   activeUid: null,
 
-  // اختيار نوع الصنف يبدأ سطراً جديداً | picking a product starts a line
-  startLine: (variant) => {
-    const line: CartLine = {
-      uid: uid(),
-      variant,
-      qty: 1,
-      weightGrams: null,
-      flavors: [],
-      extras: [],
-    };
+  // اختيار صنف يبدأ سطراً جديداً؛ الحجم الوحيد يُختار تلقائياً
+  start: (product) => {
+    const only = product.pricing === "size" && product.sizes.length === 1 ? product.sizes[0] : null;
+    const line: CartLine = { uid: uid(), product, size: only, qty: 1, weight_g: null, flavors: [], extras: [] };
     set((s) => ({ lines: [...s.lines, line], activeUid: line.uid }));
   },
 
-  setActive: (uid) => set({ activeUid: uid }),
+  setActive: (activeUid) => set({ activeUid }),
 
-  // النكهة تُضاف أو تُزال، وتتوقف عند الحد الأقصى للصنف
-  toggleFlavor: (flavor) =>
+  setSize: (size) =>
+    set((s) =>
+      patchActive(s, (l) => ({ ...l, size, flavors: l.flavors.slice(0, Math.max(size.scoops, 0)) }))
+    ),
+
+  setWeight: (g) => set((s) => patchActive(s, (l) => ({ ...l, weight_g: g }))),
+
+  toggleFlavor: (f) =>
+    set((s) =>
+      patchActive(s, (l) => {
+        if (l.flavors.some((x) => x.id === f.id)) return { ...l, flavors: l.flavors.filter((x) => x.id !== f.id) };
+        const max = maxFlavors(l);
+        if (max <= 0) return l;
+        const next = { id: f.id, name: f.name, color: f.color };
+        // عند الحد: نكهة واحدة تُستبدل، وإلا لا شيء | at the limit: a single pick swaps
+        if (l.flavors.length >= max) return max === 1 ? { ...l, flavors: [next] } : l;
+        return { ...l, flavors: [...l.flavors, next] };
+      })
+    ),
+
+  toggleExtra: (x) =>
+    set((s) =>
+      patchActive(s, (l) =>
+        l.extras.some((e) => e.id === x.id)
+          ? { ...l, extras: l.extras.filter((e) => e.id !== x.id) }
+          : { ...l, extras: [...l.extras, { id: x.id, name: x.name, price: x.price }] }
+      )
+    ),
+
+  setQty: (id, qty) =>
+    set((s) => ({ lines: s.lines.map((l) => (l.uid === id ? { ...l, qty: Math.max(1, Math.min(99, qty)) } : l)) })),
+
+  remove: (id) =>
     set((s) => {
-      const lines = s.lines.map((l) => {
-        if (l.uid !== s.activeUid) return l;
-        const has = l.flavors.some((f) => f.id === flavor.id);
-        if (has) {
-          return { ...l, flavors: l.flavors.filter((f) => f.id !== flavor.id) };
-        }
-        if (l.flavors.length >= l.variant.max_flavors) return l; // at the limit
-        return {
-          ...l,
-          flavors: [
-            ...l.flavors,
-            { id: flavor.id, name_ar: flavor.name_ar, color: flavor.color },
-          ],
-        };
-      });
-      return { lines };
+      const lines = s.lines.filter((l) => l.uid !== id);
+      return { lines, activeUid: s.activeUid === id ? (lines.at(-1)?.uid ?? null) : s.activeUid };
     }),
 
-  toggleExtra: (extra) =>
-    set((s) => ({
-      lines: s.lines.map((l) => {
-        if (l.uid !== s.activeUid) return l;
-        const has = l.extras.some((e) => e.id === extra.id);
-        return {
-          ...l,
-          extras: has
-            ? l.extras.filter((e) => e.id !== extra.id)
-            : [...l.extras, { id: extra.id, name_ar: extra.name_ar, price: Number(extra.price) }],
-        };
-      }),
-    })),
-
-  setWeight: (grams) =>
-    set((s) => ({
-      lines: s.lines.map((l) =>
-        l.uid === s.activeUid ? { ...l, weightGrams: grams } : l
-      ),
-    })),
-
-  setQty: (uid, qty) =>
-    set((s) => ({
-      lines: s.lines.map((l) =>
-        l.uid === uid ? { ...l, qty: Math.max(1, Math.min(99, qty)) } : l
-      ),
-    })),
-
-  removeLine: (uid) =>
-    set((s) => ({
-      lines: s.lines.filter((l) => l.uid !== uid),
-      activeUid: s.activeUid === uid ? null : s.activeUid,
-    })),
-
   clear: () => set({ lines: [], activeUid: null }),
-
-  activeLine: () => get().lines.find((l) => l.uid === get().activeUid) ?? null,
-
-  subtotal: () =>
-    Math.round(get().lines.reduce((s, l) => s + linePrice(l), 0) * 100) / 100,
-
-  toPayload: () =>
-    get().lines.map((l) => ({
-      variant_id: l.variant.id,
-      qty: l.qty,
-      weight_grams: l.variant.kind === "weight" ? l.weightGrams : null,
-      flavors: l.flavors.map((f) => ({ flavor_id: f.id, grams: null })),
-      extras: l.extras.map((e) => ({ extra_id: e.id, qty: 1 })),
-    })),
-
-  // جاهزة للدفع؟ | every line must have what it needs
-  isReady: () => {
-    const { lines } = get();
-    if (!lines.length) return false;
-    return lines.every((l) => {
-      if (l.variant.kind === "weight") {
-        return (l.weightGrams ?? 0) > 0 && l.flavors.length > 0;
-      }
-      return l.flavors.length > 0;
-    });
-  },
 }));
+
+export function cartTotal(lines: CartLine[]): number {
+  return round2(lines.reduce((s, l) => s + linePrice(l), 0));
+}
+
+export function toPayload(lines: CartLine[]): OrderItemInput[] {
+  return lines.map((l) => ({
+    product_id: l.product.id,
+    size_id: l.size?.id ?? null,
+    qty: l.qty,
+    weight_g: l.product.pricing === "weight" ? l.weight_g : null,
+    flavor_ids: l.flavors.map((f) => f.id),
+    extra_ids: l.extras.map((e) => e.id),
+  }));
+}
