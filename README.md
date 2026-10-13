@@ -109,6 +109,7 @@ npm run desktop:smoke        # boot + self-test, exits 0/1
 npx electron-builder --win   # Windows installer (on Windows; CI does this)
 ```
 
-**Release:** bump `version` in `package.json`, commit, then push a tag `vX.Y.Z` —
-GitHub Actions builds the installer on Windows, smoke-tests it and publishes the release;
+**Release:** bump `version` in `package.json` and push to `main`, then
+GitHub → Actions → **Desktop app (Windows)** → **Run workflow** (or push a tag `vX.Y.Z`).
+It builds the installer on Windows, smoke-tests it and publishes release `vX.Y.Z`;
 installed apps pick it up automatically.

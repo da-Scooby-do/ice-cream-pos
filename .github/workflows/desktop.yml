@@ -1,13 +1,19 @@
 # برنامج ويندوز | builds the Windows installer on a real Windows machine.
-#   • push a tag like v2.0.1  → build, smoke-test, publish a GitHub Release
-#     (the installed app updates itself from there)
-#   • "Run workflow" by hand    → build + smoke-test, installer as an artifact
+#   • push a tag like v2.0.1, or "Run workflow" with publish ticked
+#       → build, smoke-test, publish GitHub Release v<package.json version>
+#         (the installed app updates itself from there)
+#   • "Run workflow" with publish unticked → installer as a build artifact only
 name: Desktop app (Windows)
 
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish a GitHub Release (version from package.json)"
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -41,11 +47,11 @@ jobs:
         run: npx electron . --smoke-test
 
       - name: Build installer
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') && !inputs.publish }}
         run: npx electron-builder --win nsis --x64 --publish never
 
       - name: Build installer and publish the release
-        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        if: ${{ startsWith(github.ref, 'refs/tags/v') || inputs.publish }}
         run: npx electron-builder --win nsis --x64 --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
