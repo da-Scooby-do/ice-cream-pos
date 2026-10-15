@@ -19,6 +19,8 @@ extraResources:
     to: server
     filter:
       - "**/*"
+      - "!.next{,/**}"
+      - "!node_modules{,/**}"
   - from: .next/standalone/.next
     to: server/.next
     filter:
