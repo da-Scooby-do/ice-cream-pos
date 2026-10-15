@@ -18,10 +18,17 @@ const COLOR = /^#[0-9a-f]{6}$/i;
 
 export function listStockItems(opts: { activeOnly?: boolean } = {}): StockItem[] {
   return all<RawItem>(
-    `SELECT id, name, kind, unit, qty, alert_qty, color, active, sort FROM stock_items
+    `SELECT id, name, kind, unit, qty, alert_qty, color, active, sort, price_extra, price_extra_kg FROM stock_items
      ${opts.activeOnly ? "WHERE active = 1" : ""}
      ORDER BY kind = 'flavor' DESC, active DESC, sort, name`
-  ).map((r) => ({ ...r, qty: Number(r.qty), alert_qty: Number(r.alert_qty), active: !!r.active }));
+  ).map((r) => ({
+    ...r,
+    qty: Number(r.qty),
+    alert_qty: Number(r.alert_qty),
+    active: !!r.active,
+    price_extra: Number(r.price_extra ?? 0),
+    price_extra_kg: Number(r.price_extra_kg ?? 0),
+  }));
 }
 
 export function listProducts(opts: { activeOnly?: boolean } = {}): Product[] {
@@ -80,6 +87,9 @@ export function saveStockItem(
   const color = typeof input.color === "string" && COLOR.test(input.color) ? input.color : null;
   const active = input.active !== false;
   const sort = Math.round(amount(input.sort ?? 0, "الترتيب", { min: -1000, max: 1000 }));
+  // نكهة مميزة بسعر أعلى | a premium flavor costs extra (flavors only)
+  const price_extra = kind === "flavor" ? amount(input.price_extra ?? 0, "الزيادة لكل بولة", { min: 0 }) : 0;
+  const price_extra_kg = kind === "flavor" ? amount(input.price_extra_kg ?? 0, "الزيادة لكل كيلو", { min: 0 }) : 0;
   const now = nowIso();
 
   return tx(() => {
@@ -98,8 +108,9 @@ export function saveStockItem(
       }
       run(
         `UPDATE stock_items SET name = $name, unit = $unit, alert_qty = $alert_qty, color = $color,
-           active = $active, sort = $sort, updated_at = $now WHERE id = $id`,
-        { id: input.id, name, unit, alert_qty, color, active, sort, now }
+           active = $active, sort = $sort, price_extra = $price_extra, price_extra_kg = $price_extra_kg,
+           updated_at = $now WHERE id = $id`,
+        { id: input.id, name, unit, alert_qty, color, active, sort, price_extra, price_extra_kg, now }
       );
       return listStockItems().find((i) => i.id === input.id)!;
     }
@@ -107,9 +118,9 @@ export function saveStockItem(
     const id = uid();
     const opening = amount(input.qty ?? 0, "الكمية الحالية", { min: 0 });
     run(
-      `INSERT INTO stock_items (id, name, kind, unit, qty, alert_qty, color, active, sort, created_at, updated_at)
-       VALUES ($id, $name, $kind, $unit, $qty, $alert_qty, $color, $active, $sort, $now, $now)`,
-      { id, name, kind, unit, qty: opening, alert_qty, color, active, sort, now }
+      `INSERT INTO stock_items (id, name, kind, unit, qty, alert_qty, color, active, sort, price_extra, price_extra_kg, created_at, updated_at)
+       VALUES ($id, $name, $kind, $unit, $qty, $alert_qty, $color, $active, $sort, $price_extra, $price_extra_kg, $now, $now)`,
+      { id, name, kind, unit, qty: opening, alert_qty, color, active, sort, price_extra, price_extra_kg, now }
     );
     if (opening > 0) {
       run(

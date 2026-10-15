@@ -111,7 +111,19 @@ async function main() {
   const FLAVORS = ["فانيليا", "شوكولاتة", "فراولة", "مانجو", "كراميل", "فستق", "ليمون", "جوافة", "بلح", "كوكيز"];
   const flav: Record<string, string> = {};
   for (const [i, n] of FLAVORS.entries())
-    flav[n] = saveStockItem(admin.id, { kind: "flavor", name: n, alert_qty: 3000, qty: 20000, sort: i, color: "#ff8800" }).id;
+    flav[n] = saveStockItem(admin.id, {
+      kind: "flavor",
+      name: n,
+      alert_qty: 3000,
+      qty: 20000,
+      sort: i,
+      color: "#ff8800",
+      // premium flavors: pistachio +500/scoop +2000/kg, dates +250/scoop
+      price_extra: n === "فستق" ? 500 : n === "بلح" ? 250 : 0,
+      price_extra_kg: n === "فستق" ? 2000 : 0,
+    }).id;
+  const EXTRA: Record<string, number> = { [flav["فستق"]]: 500, [flav["بلح"]]: 250 };
+  const EXTRA_KG: Record<string, number> = { [flav["فستق"]]: 2000 };
   const item = (name: string, unit: string, qty: number) =>
     saveStockItem(admin.id, { kind: "item", name, unit, alert_qty: 50, qty }).id;
   const cupS = item("كوب صغير", "pcs", 2000);
@@ -281,7 +293,8 @@ async function main() {
         const w = pick([250, 500, 750, 1000]);
         const fl = [...new Set([pick(flavorIds), pick(flavorIds), pick(flavorIds)])].slice(0, 1 + Math.floor(rnd() * 3));
         items.push({ product_id: kilo.id, weight_g: w, flavor_ids: fl, extra_ids: extras, qty });
-        const unit = r2((12000 * w) / 1000 + extraPrice);
+        const sur = r2(fl.reduce((a, f) => a + (EXTRA_KG[f] ?? 0) * (w / fl.length / 1000), 0));
+        const unit = r2((12000 * w) / 1000 + sur + extraPrice);
         total += r2(unit * qty);
         for (const f of fl) add(f, r2((w / fl.length) * qty));
         add(box, qty);
@@ -290,7 +303,8 @@ async function main() {
         const p = pick(P.filter((x) => x.price >= 0));
         const fl = p.scoops ? [...new Set(Array.from({ length: p.scoops }, () => pick(flavorIds)))] : [];
         items.push({ product_id: p.pid, size_id: p.sid, flavor_ids: fl, extra_ids: extras, qty });
-        const unit = r2(p.price + extraPrice);
+        const sur = fl.length ? r2(fl.reduce((a, f) => a + (EXTRA[f] ?? 0) * (p.scoops / fl.length), 0)) : 0;
+        const unit = r2(p.price + sur + extraPrice);
         total += r2(unit * qty);
         for (const f of fl) add(f, r2(((p.scoops * p.sg) / fl.length) * qty));
         for (const [sid, q] of p.recipe) add(sid, q * qty);

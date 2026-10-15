@@ -285,6 +285,12 @@ export default function PosScreen({
                                   style={{ background: f.color ?? "#eee" }}
                                 />
                                 <span className="truncate">{f.name}</span>
+                                {(active.product.pricing === "weight" ? f.price_extra_kg : f.price_extra) > 0 && (
+                                  <span className="text-[11px] font-bold tnum opacity-70 shrink-0">
+                                    +{num(active.product.pricing === "weight" ? f.price_extra_kg : f.price_extra)}
+                                    {active.product.pricing === "weight" ? "/كجم" : ""}
+                                  </span>
+                                )}
                                 {lowIds.has(f.id) && (
                                   <span className="absolute top-1 left-1 w-2 h-2 rounded-full bg-red-600" title="نقص" />
                                 )}

@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { round2 } from "@/lib/format";
+import { flavorSurcharge } from "@/lib/pricing";
 import type { Extra, OrderItemInput, Product, Size, StockItem } from "@/lib/types";
 
 // سلة الطلب | the order being rung up. Lives in memory for seconds; the
@@ -13,7 +14,7 @@ export type CartLine = {
   size: Size | null;
   qty: number;
   weight_g: number | null;
-  flavors: { id: string; name: string; color: string | null }[];
+  flavors: { id: string; name: string; color: string | null; price_extra: number; price_extra_kg: number }[];
   extras: { id: string; name: string; price: number }[];
 };
 
@@ -27,7 +28,11 @@ export function linePrice(l: CartLine): number {
       ? ((l.product.price_per_kg ?? 0) * (l.weight_g ?? 0)) / 1000
       : (l.size?.price ?? 0);
   const extras = l.extras.reduce((s, e) => s + e.price, 0);
-  return round2((base + extras) * l.qty);
+  const surcharge = flavorSurcharge(
+    { pricing: l.product.pricing, scoops: maxFlavors(l), weight_g: l.weight_g },
+    l.flavors
+  );
+  return round2(round2(base + surcharge + extras) * l.qty);
 }
 
 /** ما الذي ينقص هذا السطر؟ | what is this line still missing? */
@@ -84,7 +89,7 @@ export const useCart = create<CartState>((set) => ({
         if (l.flavors.some((x) => x.id === f.id)) return { ...l, flavors: l.flavors.filter((x) => x.id !== f.id) };
         const max = maxFlavors(l);
         if (max <= 0) return l;
-        const next = { id: f.id, name: f.name, color: f.color };
+        const next = { id: f.id, name: f.name, color: f.color, price_extra: f.price_extra, price_extra_kg: f.price_extra_kg };
         // عند الحد: نكهة واحدة تُستبدل، وإلا لا شيء | at the limit: a single pick swaps
         if (l.flavors.length >= max) return max === 1 ? { ...l, flavors: [next] } : l;
         return { ...l, flavors: [...l.flavors, next] };

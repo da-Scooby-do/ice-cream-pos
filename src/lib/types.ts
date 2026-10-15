@@ -30,6 +30,9 @@ export type StockItem = {
   color: string | null;
   active: boolean;
   sort: number;
+  /** flavors only: extra price per scoop, and per kilo for products sold by weight */
+  price_extra: number;
+  price_extra_kg: number;
 };
 
 export type Size = {

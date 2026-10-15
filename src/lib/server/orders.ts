@@ -1,5 +1,6 @@
 import { all, get, nowIso, run, tx, uid } from "../db/sqlite";
 import { round2 } from "../format";
+import { flavorSurcharge } from "../pricing";
 import { can, type Who } from "../perms";
 import type { OrderItemInput, OrderRow, Payment, Receipt, ReceiptItem, ShiftKind } from "../types";
 import { amount, fail, oneOf, text } from "./errors";
@@ -20,7 +21,7 @@ type ProductRow = {
   active: number;
 };
 type SizeRow = { id: string; product_id: string; name: string; price: number; scoops: number; active: number };
-type FlavorRow = { id: string; name: string };
+type FlavorRow = { id: string; name: string; price_extra: number; price_extra_kg: number };
 type ExtraRow = { id: string; name: string; price: number; stock_item_id: string | null; qty: number };
 
 export function createOrder(
@@ -77,14 +78,26 @@ export function createOrder(
       if (flavorIds.length > Math.max(maxFlavors, 0)) {
         fail(maxFlavors ? `«${p.name}»: الحد ${maxFlavors} نكهات` : `«${p.name}» بدون نكهات`);
       }
-      const flavors = flavorIds.map((fid) => {
+      const flavorRows = flavorIds.map((fid) => {
         const f =
-          get<FlavorRow>("SELECT id, name FROM stock_items WHERE id = $id AND kind = 'flavor' AND active = 1", {
-            id: fid,
-          }) ?? fail("نكهة غير متوفرة");
+          get<FlavorRow>(
+            "SELECT id, name, price_extra, price_extra_kg FROM stock_items WHERE id = $id AND kind = 'flavor' AND active = 1",
+            { id: fid }
+          ) ?? fail("نكهة غير متوفرة");
         const g = round2((flavorGrams / flavorIds.length) * n);
         add(f.id, g);
-        return { id: f.id, name: f.name, grams: g };
+        return f;
+      });
+      // نكهات مميزة بسعر أعلى | premium flavors
+      const surcharge = flavorSurcharge({ pricing: p.pricing, scoops: maxFlavors, weight_g: weight }, flavorRows);
+      const flavors = flavorRows.map((f) => {
+        const extra = flavorSurcharge({ pricing: p.pricing, scoops: maxFlavors, weight_g: weight }, [f]) / flavorRows.length;
+        return {
+          id: f.id,
+          name: f.name,
+          grams: round2((flavorGrams / flavorRows.length) * n),
+          ...(extra > 0 ? { extra: round2(extra) } : {}),
+        };
       });
 
       // الإضافات | extras
@@ -106,7 +119,7 @@ export function createOrder(
       );
       for (const r of recipe) add(r.stock_item_id, Number(r.qty) * n);
 
-      const unit = round2(base + extras.reduce((s, e) => s + e.price, 0));
+      const unit = round2(base + surcharge + extras.reduce((s, e) => s + e.price, 0));
       return {
         id: uid(),
         product: p,
@@ -225,7 +238,10 @@ type RawItem = {
 
 function parseNames(json: string): string[] {
   try {
-    return (JSON.parse(json) as { name: string }[]).map((x) => x.name);
+    // a premium flavor shows its surcharge on the receipt: «فستق +500»
+    return (JSON.parse(json) as { name: string; extra?: number }[]).map((x) =>
+      x.extra ? `${x.name} +${Math.round(x.extra * 100) / 100}` : x.name
+    );
   } catch {
     return [];
   }

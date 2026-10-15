@@ -4,7 +4,7 @@ import { Check, CupSoda, IceCreamCone, Package, Plus, Sparkles } from "lucide-re
 import { useState } from "react";
 import { Page, PageHeader } from "@/components/Page";
 import { Empty, Segmented } from "@/components/ui";
-import { money, qty } from "@/lib/format";
+import { money, qty, num } from "@/lib/format";
 import type { Extra, Product, StockItem } from "@/lib/types";
 import { ExtraEditor, ProductEditor, StockItemEditor } from "./editors";
 
@@ -174,6 +174,13 @@ export default function ProductsManager({
                 <p className={`mt-2 text-sm tnum ${f.alert_qty && f.qty <= f.alert_qty ? "text-red-700 font-bold" : "text-ink-500"}`}>
                   المتوفر: {qty(f.qty, "g")}
                 </p>
+                {(f.price_extra > 0 || f.price_extra_kg > 0) && (
+                  <p className="mt-1 text-xs font-semibold tnum text-ink-600 bg-lemon-50 ring-1 ring-lemon-200 rounded-lg px-2 py-1 inline-block">
+                    نكهة مميزة: {f.price_extra > 0 ? `+${num(f.price_extra)} للبولة` : ""}
+                    {f.price_extra > 0 && f.price_extra_kg > 0 ? " · " : ""}
+                    {f.price_extra_kg > 0 ? `+${num(f.price_extra_kg)} للكيلو` : ""}
+                  </p>
+                )}
               </button>
             ))}
           </div>

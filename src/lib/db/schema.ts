@@ -251,4 +251,10 @@ CREATE TABLE snapshot_queue (
 ${outboxTriggers}
 `;
 
-export const MIGRATIONS: string[] = [V1];
+// v2: نكهات بسعر إضافي | premium flavors (extra per scoop / per kilo)
+const V2 = `
+ALTER TABLE stock_items ADD COLUMN price_extra REAL NOT NULL DEFAULT 0 CHECK (price_extra >= 0);
+ALTER TABLE stock_items ADD COLUMN price_extra_kg REAL NOT NULL DEFAULT 0 CHECK (price_extra_kg >= 0);
+`;
+
+export const MIGRATIONS: string[] = [V1, V2];

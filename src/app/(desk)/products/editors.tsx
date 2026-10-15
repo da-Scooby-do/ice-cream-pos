@@ -413,6 +413,8 @@ export function StockItemEditor({
   const [alert, setAlert] = useState(item ? s(item.alert_qty / INPUT_UNIT[item.unit].factor) : "");
   const [color, setColor] = useState(item?.color ?? FLAVOR_COLORS[0]);
   const [active, setActive] = useState(item?.active ?? true);
+  const [extra, setExtra] = useState(item?.price_extra ? s(item.price_extra) : "");
+  const [extraKg, setExtraKg] = useState(item?.price_extra_kg ? s(item.price_extra_kg) : "");
   const isFlavor = kind === "flavor";
 
   return (
@@ -432,6 +434,8 @@ export function StockItemEditor({
                 active,
                 qty: Number(qty || 0) * f,
                 alert_qty: Number(alert || 0) * f,
+                price_extra: isFlavor ? Number(extra || 0) : 0,
+                price_extra_kg: isFlavor ? Number(extraKg || 0) : 0,
               }),
             done
           );
@@ -480,6 +484,22 @@ export function StockItemEditor({
             <NumInput value={alert} onChange={setAlert} suffix={INPUT_UNIT[unit].label} />
           </Field>
         </div>
+
+        {isFlavor && (
+          <div className="rounded-2xl ring-1 ring-lemon-200 bg-lemon-50 p-4 space-y-3">
+            <p className="text-sm font-semibold">
+              نكهة مميزة بسعر أعلى؟ <span className="font-normal text-ink-500">(اختياري — اتركه فارغاً للسعر العادي)</span>
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="زيادة لكل بولة" hint="تُضاف لسعر الحجم حسب عدد بولات هذه النكهة">
+                <NumInput value={extra} onChange={setExtra} placeholder="0" suffix="ج.س" />
+              </Field>
+              <Field label="زيادة لكل كيلو" hint="للأصناف التي تُباع بالوزن">
+                <NumInput value={extraKg} onChange={setExtraKg} placeholder="0" suffix="ج.س" />
+              </Field>
+            </div>
+          </div>
+        )}
 
         <Toggle checked={active} onChange={setActive} label={isFlavor ? "النكهة متاحة" : "المادة مستخدمة"} />
         <ErrorNote error={error} />

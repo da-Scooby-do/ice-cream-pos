@@ -23,6 +23,7 @@ An Arabic, offline-first point-of-sale and inventory **desktop app** for a singl
 | **ورديتان** | A day (صباحية) and a night (مسائية) shift — or just one. Each opens with the cash in the drawer. A night shift that runs past midnight belongs to the day it started. |
 | **البيع** | Product → size → flavors → extras → **Enter, Enter** → the receipt prints silently. Cash (with change) or bank transfer (بنكك). |
 | **الأصناف من الصفر** | The app starts empty; the admin adds flavors, cups/cones/spoons/milk, products with their sizes and prices, and what each sale uses up. Products sold by weight are supported. |
+| **نكهات مميزة** | A flavor can cost extra: “+500 per scoop” and/or “+2,000 per kilo” (for products sold by weight). The surcharge follows how many scoops (or how much weight) of that flavor are in the cup, shows on the till button and prints on the receipt (“فستق +500”). |
 | **خصم المخزون تلقائياً** | Each sale deducts scoops × grams from the chosen flavors (or the exact weight), plus the cup/cone/spoon/straw/milk set on that size, plus extras. Voids put it all back. |
 | **الإيرادات والمصروفات** | Two ledgers: income (sales + other income) and expenses (rent, electricity, ice, salaries…). Expenses can be added during or at the end of a shift, paid from the drawer or not. |
 | **كشف الوردية** | Closing a shift prints an 80mm statement: income, expenses, **net profit**, the cash-drawer check (short/over), items sold, and the whole day's totals when there were two shifts. |
