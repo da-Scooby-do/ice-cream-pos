@@ -27,7 +27,12 @@ export function Modal({
   }, [onClose]);
 
   const width = { sm: "max-w-md", md: "max-w-xl", lg: "max-w-3xl", xl: "max-w-5xl" }[size];
-  return (
+  // Rendered on <body>: an animated page (transform) would otherwise trap the
+  // fixed overlay inside the page and crop it.
+  const [host, setHost] = useState<HTMLElement | null>(null);
+  useEffect(() => setHost(document.body), []);
+  if (!host) return null;
+  return createPortal(
     <div className="fixed inset-0 z-50 bg-ink-900/50 backdrop-blur-[2px] grid place-items-center p-4" onMouseDown={onClose}>
       <div
         className={`w-full ${width} bg-white rounded-3xl shadow-lift animate-pop max-h-[94dvh] flex flex-col`}
@@ -44,6 +49,8 @@ export function Modal({
         <div className="p-5 overflow-auto space-y-4">{children}</div>
       </div>
     </div>
+  ,
+    host
   );
 }
 

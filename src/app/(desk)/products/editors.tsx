@@ -32,6 +32,27 @@ function Swatches({ colors, value, onChange }: { colors: string[]; value: string
           style={{ background: c }}
         />
       ))}
+      {/* عجلة الألوان: أي لون | color wheel for any custom color */}
+      <label
+        title="اختر أي لون"
+        className={`relative w-8 h-8 rounded-full cursor-pointer ring-offset-2 transition ${
+          !colors.includes(value) ? "ring-2 ring-ink scale-110" : "ring-1 ring-ink-100"
+        }`}
+        style={{
+          background: "conic-gradient(red, yellow, lime, cyan, blue, magenta, red)",
+        }}
+      >
+        {!colors.includes(value) && (
+          <span className="absolute inset-1.5 rounded-full ring-2 ring-white" style={{ background: value }} />
+        )}
+        <input
+          type="color"
+          value={/^#[0-9a-f]{6}$/i.test(value) ? value : "#00adef"}
+          onChange={(e) => onChange(e.target.value.toUpperCase())}
+          className="absolute inset-0 opacity-0 cursor-pointer"
+          aria-label="اختر أي لون"
+        />
+      </label>
     </div>
   );
 }
