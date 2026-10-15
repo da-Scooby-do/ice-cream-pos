@@ -205,7 +205,7 @@ export type ShiftStatement = {
   day: { date: string; shifts: number; totals: Totals } | null;
 };
 
-export type FlavorUse = { name: string; grams: number };
+export type FlavorUse = { name: string; grams: number; color?: string | null };
 
 export type DayStatement = {
   date: string;
@@ -237,7 +237,8 @@ export type Dashboard = {
   products: { name: string; category: string; qty: number; revenue: number }[];
   sizes: { product: string; size: string; qty: number; revenue: number }[];
   categories: { category: string; qty: number; revenue: number }[];
-  by_hour: { hour: number; orders: number; revenue: number }[];
+  /** day_orders: how many of the hour's receipts were in a day shift (older cloud snapshots lack it) */
+  by_hour: { hour: number; orders: number; revenue: number; day_orders?: number }[];
   by_weekday: { day: number; orders: number; revenue: number; days: number }[];
   by_day: { date: string; orders: number; revenue: number }[];
   flavors: FlavorUse[];

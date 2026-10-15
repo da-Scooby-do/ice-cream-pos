@@ -41,7 +41,15 @@ export default function OpenShiftForm({ name, suggested, today }: { name: string
                 key={k}
                 type="button"
                 onClick={() => setKind(k)}
-                className={`btn flex-col py-6 text-lg ring-2 ${kind === k ? "bg-sky ring-ink" : "bg-white ring-ink-100"}`}
+                className={`btn flex-col py-6 text-lg ring-2 ${
+                  kind === k
+                    ? k === "day"
+                      ? "bg-day text-white ring-day-text"
+                      : "bg-night text-white ring-night-text"
+                    : k === "day"
+                      ? "bg-white ring-ink-100 text-day-text"
+                      : "bg-white ring-ink-100 text-night-text"
+                }`}
               >
                 <Icon size={30} />
                 الوردية {label}

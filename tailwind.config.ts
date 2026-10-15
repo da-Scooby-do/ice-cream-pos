@@ -45,6 +45,11 @@ export default {
           900: "#181A1C",
         },
         cone: "#F9A72B",
+        // معاني الألوان — انظر src/lib/colors.ts | semantic colors
+        inflow: { DEFAULT: "#0ca30c", text: "#006300", soft: "#ECF8EC", ring: "#BFE5BF" },
+        outflow: { DEFAULT: "#d03b3b", text: "#A82424", soft: "#FDEFEF", ring: "#F2C7C7" },
+        day: { DEFAULT: "#c98500", text: "#7A5100", soft: "#FFF6E0", ring: "#F2D58E" },
+        night: { DEFAULT: "#6250d6", text: "#4A3AA7", soft: "#F0EEFC", ring: "#CBC4F3" },
         paper: "#F3F7F9",
       },
       boxShadow: {

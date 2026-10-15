@@ -1,19 +1,6 @@
 "use client";
 
-import {
-  AlertTriangle,
-  Banknote,
-  CheckCircle2,
-  Landmark,
-  Lock,
-  Minus,
-  Plus,
-  Printer,
-  Scale,
-  Trash2,
-  Wallet,
-  X,
-} from "lucide-react";
+import { AlertTriangle, Banknote, CheckCircle2, Landmark, Lock, Minus, Moon, Plus, Printer, Scale, Sun, Trash2, Wallet, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
@@ -150,8 +137,12 @@ export default function PosScreen({
     <div className="h-dvh flex flex-col">
       {/* ================= الشريط العلوي | top bar ================= */}
       <header className="flex items-center gap-2 px-4 py-2.5 bg-white border-b border-ink-100">
-        <div className="flex items-center gap-2 rounded-2xl bg-sky-50 ring-1 ring-sky-100 px-3 py-1.5">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+        <div
+          className={`flex items-center gap-2 rounded-2xl ring-1 px-3 py-1.5 ${
+            shift.kind === "day" ? "bg-day-soft ring-day-ring" : "bg-night-soft ring-night-ring"
+          }`}
+        >
+          {shift.kind === "day" ? <Sun size={16} className="text-day" /> : <Moon size={16} className="text-night" />}
           <span className="text-sm font-semibold">{SHIFT_LABEL[shift.kind]}</span>
           <span className="text-xs text-ink-400">
             منذ {clock(shift.opened_at)} · {shift.opened_by}

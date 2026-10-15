@@ -99,12 +99,13 @@ export function productSales(scope: Scope): ProductSale[] {
 export function flavorUse(scope: Scope): FlavorUse[] {
   const o = where(scope, "o");
   return all<FlavorUse>(
-    `SELECT MAX(f.value ->> 'name') AS name, ROUND(SUM(f.value ->> 'grams'), 0) AS grams
+    `SELECT MAX(f.value ->> 'name') AS name, ROUND(SUM(f.value ->> 'grams'), 0) AS grams, MAX(si.color) AS color
      FROM order_items i JOIN orders o ON o.id = i.order_id, json_each(i.flavors) f
+     LEFT JOIN stock_items si ON si.id = f.value ->> 'id'
      WHERE ${o.sql} AND o.voided_at IS NULL
      GROUP BY f.value ->> 'id' ORDER BY grams DESC`,
     o.params
-  ).map((r) => ({ name: r.name, grams: Number(r.grams) }));
+  ).map((r) => ({ name: r.name, grams: Number(r.grams), color: r.color ?? null }));
 }
 
 // --- كشف الوردية | shift statement (printed when a shift closes) ------------
@@ -238,14 +239,16 @@ export function dashboard(from: string, to: string): Dashboard {
     catMap.set(key, c);
   }
 
-  const hours = all<{ h: number; n: number; v: number }>(
-    `SELECT CAST(strftime('%H', created_at, '+2 hours') AS INTEGER) AS h, COUNT(*) AS n, ROUND(SUM(total), 2) AS v
-     FROM orders WHERE business_date BETWEEN $from AND $to AND voided_at IS NULL GROUP BY h`,
+  const hours = all<{ h: number; n: number; v: number; day: number }>(
+    `SELECT CAST(strftime('%H', o.created_at, '+2 hours') AS INTEGER) AS h, COUNT(*) AS n, ROUND(SUM(o.total), 2) AS v,
+            SUM(s.kind = 'day') AS day
+     FROM orders o JOIN shifts s ON s.id = o.shift_id
+     WHERE o.business_date BETWEEN $from AND $to AND o.voided_at IS NULL GROUP BY h`,
     params
   );
   const by_hour = Array.from({ length: 24 }, (_, hour) => {
     const r = hours.find((x) => Number(x.h) === hour);
-    return { hour, orders: Number(r?.n ?? 0), revenue: Number(r?.v ?? 0) };
+    return { hour, orders: Number(r?.n ?? 0), revenue: Number(r?.v ?? 0), day_orders: Number(r?.day ?? 0) };
   });
 
   const wd = all<{ w: number; n: number; v: number; days: number }>(

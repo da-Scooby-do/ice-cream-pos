@@ -69,7 +69,7 @@ export default function CloseShift({
               <p className="label mt-3">صافي الربح</p>
               <p className={`text-4xl font-bold tnum ${final.totals.net < 0 ? "text-red-700" : ""}`}>{money(final.totals.net)}</p>
               {final.drawer.diff != null && final.drawer.diff !== 0 && (
-                <p className={`mt-2 font-bold ${final.drawer.diff < 0 ? "text-red-700" : "text-amber-700"}`}>
+                <p className={`mt-2 font-bold ${final.drawer.diff < 0 ? "text-outflow-text" : "text-ink-600"}`}>
                   {final.drawer.diff < 0 ? "عجز" : "زيادة"} في الدرج: {money(Math.abs(final.drawer.diff))}
                 </p>
               )}
@@ -195,7 +195,7 @@ export default function CloseShift({
               {counted !== "" && (
                 <p
                   className={`mt-1 font-bold ${
-                    diff === 0 ? "text-emerald-700" : diff < 0 ? "text-red-700" : "text-amber-700"
+                    diff === 0 ? "text-inflow-text" : diff < 0 ? "text-outflow-text" : "text-ink-600"
                   }`}
                 >
                   {diff === 0 ? "مطابق ✓" : diff < 0 ? `عجز ${money(-diff)}` : `زيادة ${money(diff)}`}

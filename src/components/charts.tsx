@@ -1,25 +1,37 @@
 "use client";
 
 import { useState } from "react";
+import { COLOR } from "@/lib/colors";
 
-// رسوم بيانية بسيطة | small single-series charts.
-// One hue (brand blue, ≥3:1 on white), bars ≤24px with a 4px rounded data
-// end, hairline baseline, the peak labelled, every bar has a hover tooltip.
+// رسوم بيانية بسيطة | small charts. Every color means one thing (see
+// src/lib/colors.ts): bars are ≤24px with a 4px rounded data end, a hairline
+// baseline, the peak labelled, and every bar has a hover tooltip.
 
-const BAR = "#0094CE";
-
-/** short = the text shown above the peak column */
-export type Col = { key: string; label: string; value: number; tip: string; short: string };
+/**
+ * short = the text shown above the peak column; color = what the bar means;
+ * parts = a stacked column (bottom first), e.g. day + night receipts in one hour.
+ */
+export type Col = {
+  key: string;
+  label: string;
+  value: number;
+  tip: string;
+  short: string;
+  color?: string;
+  parts?: { value: number; color: string }[];
+};
 
 /** أعمدة رأسية | vertical columns (hours, weekdays, days) */
 export function Columns({
   data,
   height = 170,
   showEvery = 1,
+  color = COLOR.count,
 }: {
   data: Col[];
   height?: number;
   showEvery?: number;
+  color?: string;
 }) {
   const [hover, setHover] = useState<number | null>(null);
   const max = Math.max(0, ...data.map((d) => d.value));
@@ -44,10 +56,27 @@ export function Columns({
                   {d.short}
                 </span>
               )}
-              <span
-                className="block w-full max-w-[24px] rounded-t-[4px] transition-opacity"
-                style={{ height: h, background: BAR, opacity: hover === null || hover === i ? 1 : 0.55 }}
-              />
+              {d.parts ? (
+                <span
+                  className="flex flex-col-reverse w-full max-w-[24px] gap-[2px] transition-opacity"
+                  style={{ height: h, opacity: hover === null || hover === i ? 1 : 0.55 }}
+                >
+                  {d.parts
+                    .filter((pt) => pt.value > 0)
+                    .map((pt, k, arr) => (
+                      <span
+                        key={k}
+                        className={k === arr.length - 1 ? "rounded-t-[4px]" : ""}
+                        style={{ flexGrow: pt.value, flexBasis: 0, background: pt.color, minHeight: 2 }}
+                      />
+                    ))}
+                </span>
+              ) : (
+                <span
+                  className="block w-full max-w-[24px] rounded-t-[4px] transition-opacity"
+                  style={{ height: h, background: d.color ?? color, opacity: hover === null || hover === i ? 1 : 0.55 }}
+                />
+              )}
               {hover === i && (
                 <span className="absolute z-10 bottom-full mb-1 rounded-xl bg-ink-800 text-white text-xs px-2.5 py-1.5 whitespace-nowrap shadow-lift pointer-events-none">
                   <b>{d.label}</b> · <span className="tnum">{d.tip}</span>
@@ -68,10 +97,10 @@ export function Columns({
   );
 }
 
-export type Row = { key: string; label: string; sub?: string; value: number; valueText: string; tip?: string };
+export type Row = { key: string; label: string; sub?: string; value: number; valueText: string; tip?: string; color?: string };
 
 /** أشرطة أفقية مرتبة | ranked horizontal bars (best sellers) */
-export function RankBars({ rows, limit = 8 }: { rows: Row[]; limit?: number }) {
+export function RankBars({ rows, limit = 8, color = COLOR.count }: { rows: Row[]; limit?: number; color?: string }) {
   const [hover, setHover] = useState<string | null>(null);
   const shown = rows.slice(0, limit);
   const max = Math.max(1, ...shown.map((r) => r.value));
@@ -97,7 +126,8 @@ export function RankBars({ rows, limit = 8 }: { rows: Row[]; limit?: number }) {
               className="h-3 rounded-full transition-opacity"
               style={{
                 width: `${Math.max(2, (r.value / max) * 100)}%`,
-                background: BAR,
+                background: r.color ?? color,
+                boxShadow: "inset 0 0 0 1px rgba(24,26,28,.08)",
                 opacity: hover === null || hover === r.key ? 1 : 0.55,
               }}
             />
@@ -110,5 +140,19 @@ export function RankBars({ rows, limit = 8 }: { rows: Row[]; limit?: number }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/** مفتاح الألوان تحت الرسم | the chart's color key */
+export function Legend({ items }: { items: { color: string; label: React.ReactNode }[] }) {
+  return (
+    <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-xs text-ink-500">
+      {items.map((it, i) => (
+        <span key={i} className="inline-flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-[4px]" style={{ background: it.color }} />
+          {it.label}
+        </span>
+      ))}
+    </div>
   );
 }
