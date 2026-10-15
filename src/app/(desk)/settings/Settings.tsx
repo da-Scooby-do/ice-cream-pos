@@ -228,7 +228,7 @@ function BackupCard({ b }: { b: BackupInfo }) {
   const [done, setDone] = useState<string | null>(null);
   const [restoring, setRestoring] = useState<string | null>(null);
   const restore = useAction();
-  const kb = (n: number) => `${num(Math.round(n / 1024))} KB`;
+  const kb = (n: number) => (n >= 1024 * 1024 ? `${num(Math.round(n / 104857.6) / 10)} MB` : `${num(Math.round(n / 1024))} KB`);
 
   return (
     <Card title={<span className="flex items-center gap-2"><HardDrive size={18} /> النسخ الاحتياطي</span>}>

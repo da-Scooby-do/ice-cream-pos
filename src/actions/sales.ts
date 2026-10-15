@@ -22,7 +22,7 @@ export async function createOrderAction(items: OrderItemInput[], payment: Paymen
 
 export async function receiptAction(orderId: string) {
   return act(async () => {
-    await requireDesk("sell", "sales");
+    await requireDesk("sell", "sales", "void");
     return receipt(orderId) ?? fail("الفاتورة غير موجودة");
   });
 }
@@ -50,7 +50,7 @@ export async function closeShiftAction(shiftId: string, counted: string, note: s
     const s = await requireDesk("sell");
     const id = closeShift(s.id, { shift_id: shiftId, counted_cash: counted, note });
     try {
-      makeBackup("shift");
+      void makeBackup("shift").catch((e) => console.error("[backup after shift]", e));
     } catch (e) {
       console.error("[backup after shift]", e);
     }

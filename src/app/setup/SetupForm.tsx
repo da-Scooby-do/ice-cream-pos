@@ -162,7 +162,7 @@ function FromFile() {
   return (
     <div className="space-y-3">
       <p className="text-sm text-ink-500">
-        اختر ملف نسخة احتياطية (ينتهي بـ ‎.db) — مثلاً من فلاشة أو من مجلد «JAC ICE Backups».
+        اختر ملف نسخة احتياطية (ينتهي بـ ‎.db.gz أو ‎.db) — مثلاً من فلاشة أو من مجلد «JAC ICE Backups».
       </p>
       <button
         type="button"

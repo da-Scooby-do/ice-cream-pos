@@ -16,6 +16,7 @@ export default function Keypad({
   enterDisabled = false,
   compact = false,
   listen = true,
+  code = false,
 }: {
   value: string;
   onChange: (next: string) => void;
@@ -27,6 +28,8 @@ export default function Keypad({
   compact?: boolean;
   /** bind the physical keyboard (turn off when a text input has focus) */
   listen?: boolean;
+  /** a PIN, not an amount: keep every digit, including leading zeros */
+  code?: boolean;
 }) {
   // The latest value, updated on every key — not only when React re-renders —
   // so fast typing never drops a digit.
@@ -48,7 +51,7 @@ export default function Keypad({
       return;
     }
     if (cur.length >= maxLength) return;
-    emit(cur === "0" ? ch : cur + ch);
+    emit(cur === "0" && !code ? ch : cur + ch);
   }
 
   useEffect(() => {

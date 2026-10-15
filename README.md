@@ -29,7 +29,7 @@ An Arabic, offline-first point-of-sale and inventory **desktop app** for a singl
 | **الكشف اليومي والشهري** | Daily and monthly statements on screen and on paper: every product × size sold, income by type, expenses by category, net profit, day-by-day table, flavor usage. |
 | **المخزون بالتاريخ** | Every delivery is logged with its date, quantity and (optional) cost — which is recorded as an expense automatically. The monthly ledger shows **opening + received − sold ± counted/wasted = closing** for every item. Low-stock alerts in red. |
 | **لوحة التحكم** | Best-selling products, most popular sizes, the busiest hours of the day, the busiest day of the week, daily revenue, flavor usage — for today / 7 days / this month / any range. |
-| **النسخ الاحتياطي** | Automatic full backup every 12 hours and after every shift close (kept in *Documents → JAC ICE Backups*, last 60), optionally mirrored to a USB stick; one-click restore from any backup file. |
+| **النسخ الاحتياطي** | Automatic full backup every 12 hours and after every shift close, compressed (`.db.gz`, ~5× smaller), kept in *Documents → JAC ICE Backups* (the 8 newest + one per day for 30 days + one per month for 2 years), optionally mirrored to a USB stick; one-click restore from any backup file. |
 | **السحابة** | When online, every change is copied to Supabase (via the Vercel app) within a minute. A brand-new laptop can be **restored from the cloud** on its first start. |
 | **تقارير الجوال** | The owner signs in on his phone with his PIN and sees today, the dashboard, daily/monthly statements and stock — read-only. |
 | **التحديثات** | The app updates itself from GitHub Releases in the background and installs on the next restart. |
@@ -106,6 +106,8 @@ npm run dev:desktop          # the laptop app in a browser: http://localhost:320
 npm run desktop:build        # production server for Electron
 npm run desktop:run          # the real desktop app
 npm run desktop:smoke        # boot + self-test, exits 0/1
+npm run test:heavy           # a simulated year (~18k sales) checked against an independent ledger,
+                             # backup/restore, then full cloud upload + restore (identical copy)
 npx electron-builder --win   # Windows installer (on Windows; CI does this)
 ```
 

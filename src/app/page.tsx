@@ -13,5 +13,6 @@ export default async function Home() {
   const s = await getSession();
   if (!s) redirect("/login");
   const first = navFor(s)[0];
-  redirect(first?.href ?? "/login");
+  // بدون أي صلاحية: إلى الدخول مع رسالة (وليس حلقة تحويل) | no permissions at all
+  redirect(first?.href ?? "/login?none=1");
 }

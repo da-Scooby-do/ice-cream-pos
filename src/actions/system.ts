@@ -20,7 +20,7 @@ import { requireDesk } from "@/lib/session";
 export async function backupNowAction() {
   return act(async () => {
     await requireDesk("admin");
-    const r = makeBackup("manual");
+    const r = await makeBackup("manual");
     revalidatePath("/settings");
     return r;
   });
@@ -39,7 +39,7 @@ export async function setBackupDirAction(dir: string | null) {
 export async function restoreFileAction(file: string) {
   return act(async () => {
     await requireDesk("admin");
-    restoreFromFile(file);
+    await restoreFromFile(file);
     revalidatePath("/", "layout");
     return null;
   });

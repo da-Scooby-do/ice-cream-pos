@@ -4,9 +4,10 @@ import { redirect } from "next/navigation";
 import { Card, Page, PageHeader, Stat } from "@/components/Page";
 import RangePicker from "@/components/RangePicker";
 import { money, num } from "@/lib/format";
-import { can } from "@/lib/perms";
+import { can, canAny } from "@/lib/perms";
 import { resolveRange } from "@/lib/ranges";
 import { listOrders } from "@/lib/server/orders";
+import { currentShift } from "@/lib/server/shifts";
 import { getShop } from "@/lib/server/shop";
 import { listStaff } from "@/lib/server/staff";
 import { getSession } from "@/lib/session";
@@ -21,9 +22,13 @@ type SP = { range?: string; from?: string; to?: string; staff?: string; pay?: st
 
 export default async function SalesPage({ searchParams }: { searchParams: Promise<SP> }) {
   const s = await getSession();
-  if (!can(s, "sales")) redirect("/");
+  if (!canAny(s, ["sales", "void"])) redirect("/");
+  // من له «إلغاء الفواتير» فقط يرى فواتير الوردية المفتوحة فقط
+  // void without sales history: only the open shift's receipts
+  const shiftOnly = !can(s, "sales");
+  const open = shiftOnly ? currentShift() : null;
   const sp = await searchParams;
-  const r = resolveRange(sp);
+  const r = resolveRange(shiftOnly && open ? { from: open.business_date, to: open.business_date } : sp);
   const page = Math.max(1, Number(sp.page) || 1);
   const payment = sp.pay === "cash" || sp.pay === "bank" ? (sp.pay as Payment) : null;
   const status = sp.status === "paid" || sp.status === "void" ? sp.status : null;
@@ -34,6 +39,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
     staff: sp.staff || null,
     payment,
     status,
+    shift: shiftOnly ? (open?.id ?? "none") : null,
     limit: PAGE,
     offset: (page - 1) * PAGE,
   });
@@ -53,9 +59,15 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
         sub={r.from === r.to ? shortDate(r.from) : `${shortDate(r.from)} — ${shortDate(r.to)}`}
         icon={<Receipt size={24} />}
       />
-      <RangePicker value={r.key} from={r.from} to={r.to} />
+      {shiftOnly ? (
+        <p className="text-sm text-ink-500">
+          {open ? "فواتير الوردية المفتوحة فقط — يمكنك إلغاء فاتورة خاطئة منها." : "لا توجد وردية مفتوحة."}
+        </p>
+      ) : (
+        <RangePicker value={r.key} from={r.from} to={r.to} />
+      )}
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className={`flex flex-wrap items-center gap-2 ${shiftOnly ? "hidden" : ""}`}>
         <Link href={link({ staff: undefined, page: undefined })} className={chip(!sp.staff)}>
           كل الموظفين
         </Link>

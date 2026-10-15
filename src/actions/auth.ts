@@ -81,7 +81,7 @@ export async function setupRestoreCloudAction(url: string, token: string) {
 export async function setupRestoreFileAction(file: string) {
   return act(async () => {
     if (!IS_DESKTOP || !needsSetup()) fail("تم إعداد البرنامج بالفعل — استخدم الإعدادات");
-    restoreFromFile(file);
+    await restoreFromFile(file);
     return null;
   });
 }

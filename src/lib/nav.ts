@@ -19,7 +19,7 @@ export const NAV: NavItem[] = [
   { href: "/pos", label: "الكاشير", icon: ShoppingBasket, perms: ["sell"] },
   { href: "/dashboard", label: "لوحة التحكم", icon: LayoutDashboard, perms: ["reports"] },
   { href: "/statements", label: "الكشوفات", icon: FileText, perms: ["reports"] },
-  { href: "/sales", label: "المبيعات", icon: Receipt, perms: ["sales"] },
+  { href: "/sales", label: "المبيعات", icon: Receipt, perms: ["sales", "void"] },
   { href: "/money", label: "الإيرادات والمصروفات", icon: Wallet, perms: ["expenses"] },
   { href: "/inventory", label: "المخزون", icon: Boxes, perms: ["stock_add", "stock_edit", "products"] },
   { href: "/products", label: "الأصناف", icon: IceCreamCone, perms: ["products"] },

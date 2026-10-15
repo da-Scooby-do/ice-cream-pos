@@ -7,9 +7,12 @@ import LoginForm from "./LoginForm";
 
 export const dynamic = "force-dynamic";
 
-export default async function LoginPage() {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ none?: string }> }) {
   if (IS_DESKTOP && needsSetup()) redirect("/setup");
-  if (await getSession()) redirect("/");
+  // none=1: signed in, but the account has no permissions left — stay here
+  // (redirecting to "/" again would loop) and let someone else sign in.
+  const none = (await searchParams).none === "1";
+  if (!none && (await getSession())) redirect("/");
   const shopName = IS_DESKTOP ? getShop().name : "JAC ICE";
 
   return (
@@ -23,6 +26,11 @@ export default async function LoginPage() {
             {IS_DESKTOP ? "أدخل رقمك السري" : "تقارير المحل — أدخل رقمك السري"}
           </p>
         </div>
+        {none && (
+          <p className="mb-3 text-center text-sm font-semibold text-red-700 bg-red-50 rounded-xl py-2.5 px-3">
+            حسابك ليست له صلاحيات حالياً — اطلب من المدير تفعيلها
+          </p>
+        )}
         <LoginForm />
       </div>
     </BrandBackdrop>

@@ -249,6 +249,7 @@ export async function restoreFromCloud(urlIn: string, tokenIn: string): Promise<
 
   const target = dbPath();
   const tmp = `${target}.restore-${Date.now()}`;
+  fs.mkdirSync(path.dirname(target), { recursive: true });
   const { DatabaseSync } = process.getBuiltinModule("node:sqlite") as typeof import("node:sqlite");
   const fresh = new DatabaseSync(tmp);
   let count = 0;
@@ -293,7 +294,7 @@ export async function restoreFromCloud(urlIn: string, tokenIn: string): Promise<
   // احتفظ بنسخة من الحالي ثم بدّل الملفات | back up current data, then swap
   const keep = keepLocalConfig();
   const hasData = fs.existsSync(target);
-  if (hasData) makeBackup("before-restore");
+  if (hasData) await makeBackup("before-restore");
   closeDb();
   for (const ext of ["", "-wal", "-shm"]) fs.rmSync(target + ext, { force: true });
   fs.mkdirSync(path.dirname(target), { recursive: true });

@@ -50,6 +50,7 @@ export default function LoginForm() {
           setPin(v);
         }}
         maxLength={8}
+        code
         onEnter={submit}
         enterLabel={pending ? "جاري الدخول…" : "دخول"}
         enterDisabled={pending || pin.length < 4}

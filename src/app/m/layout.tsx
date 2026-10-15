@@ -22,7 +22,8 @@ export type Meta = {
 export default async function PhoneLayout({ children }: { children: React.ReactNode }) {
   if (IS_DESKTOP) redirect("/");
   const s = await getSession();
-  if (!s || !can(s, "reports")) redirect("/login");
+  if (!s) redirect("/login");
+  if (!can(s, "reports")) redirect("/login?none=1");
   const meta = (await getSnapshot<Meta>("meta"))?.data ?? null;
   const stale = meta ? Date.now() - Date.parse(meta.synced_at) > 15 * 60_000 : true;
 

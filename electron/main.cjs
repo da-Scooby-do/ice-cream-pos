@@ -327,7 +327,7 @@ function registerIpc() {
         title: "اختر ملف النسخة الاحتياطية",
         defaultPath: typeof defaultDir === "string" ? defaultDir : app.getPath("documents"),
         properties: ["openFile"],
-        filters: [{ name: "JAC ICE backup", extensions: ["db"] }],
+        filters: [{ name: "JAC ICE backup", extensions: ["gz", "db"] }],
       });
       return r.canceled ? null : r.filePaths[0];
     })

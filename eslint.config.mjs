@@ -14,5 +14,5 @@ export default [
       ],
     },
   },
-  { ignores: [".next/**", "node_modules/**", "next-env.d.ts", "dist/**", "electron/**", "scripts/**"] },
+  { ignores: [".next/**", "node_modules/**", "next-env.d.ts", "dist/**", "electron/**", "scripts/**", "tests/**"] },
 ];
