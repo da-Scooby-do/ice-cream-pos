@@ -272,7 +272,8 @@ function initUpdates() {
   updater.on("update-downloaded", (i) => setUpdate({ status: "ready", version: i.version }));
   updater.on("error", (e) => {
     log("update error", e?.message);
-    setUpdate({ status: "error", error: "لا يوجد اتصال أو تعذر الوصول لخادم التحديثات" });
+    const msg = String(e?.message ?? "").split("\n")[0].slice(0, 160);
+    setUpdate({ status: "error", error: `لا يوجد اتصال أو تعذر الوصول لخادم التحديثات${msg ? ` (${msg})` : ""}` });
   });
   const check = () => updater.checkForUpdates().catch(() => {});
   setTimeout(check, 15_000);

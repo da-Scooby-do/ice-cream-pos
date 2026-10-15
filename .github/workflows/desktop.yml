@@ -61,6 +61,20 @@ jobs:
             git tag "$tag" && git push origin "$tag"
           fi
 
+      - name: Remove any half-published release for this version
+        if: ${{ startsWith(github.ref, 'refs/tags/v') || inputs.publish }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="v$(node -p "require('./package.json').version")"
+          # a failed run can leave a release without the installer; the updater
+          # would then find no latest.yml. Start clean (the git tag is kept).
+          for i in 1 2 3 4 5; do
+            gh release view "$tag" >/dev/null 2>&1 || break
+            gh release delete "$tag" --yes
+          done
+
       - name: Build installer and publish the release
         if: ${{ startsWith(github.ref, 'refs/tags/v') || inputs.publish }}
         run: npx electron-builder --win nsis --x64 --publish always
