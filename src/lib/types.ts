@@ -136,6 +136,9 @@ export type Totals = {
   voids: number;
   sales_cash: number;
   sales_bank: number;
+  /** how many receipts were paid cash / by bank transfer (older cloud snapshots lack these) */
+  orders_cash?: number;
+  orders_bank?: number;
   sales: number;
   other_income: number;
   income: number; // sales + other income
@@ -152,7 +155,8 @@ export type ProductSale = {
   weight_g: number;
 };
 
-export type MoneyLine = { category: string; amount: number };
+/** count: number of receipts, for the cash / bank sales lines */
+export type MoneyLine = { category: string; amount: number; count?: number };
 
 export type EntryRow = {
   id: string;
@@ -218,7 +222,18 @@ export type DayStatement = {
   flavors: FlavorUse[];
 };
 
-export type DayRow = { date: string; orders: number; income: number; expenses: number; net: number };
+export type DayRow = {
+  date: string;
+  orders: number;
+  income: number;
+  expenses: number;
+  net: number;
+  /** sales by payment: amount and number of receipts (older cloud snapshots lack these) */
+  cash?: number;
+  bank?: number;
+  orders_cash?: number;
+  orders_bank?: number;
+};
 
 export type MonthStatement = {
   month: string;

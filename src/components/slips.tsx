@@ -84,11 +84,17 @@ export function ReceiptSlip({ r, shop }: { r: Receipt; shop: Shop }) {
 
 // --- الأجزاء المشتركة للكشوفات | statement building blocks --------------------
 
-function IncomeBlock({ lines, total }: { lines: { category: string; amount: number }[]; total: number }) {
+function IncomeBlock({ lines, total }: { lines: { category: string; amount: number; count?: number }[]; total: number }) {
   return (
     <>
       <div className="s-sec">الإيرادات</div>
-      {lines.length ? lines.map((l) => <Row key={l.category} l={l.category} v={money(l.amount)} />) : <Row l="لا يوجد" v="—" />}
+      {lines.length ? (
+        lines.map((l) => (
+          <Row key={l.category} l={l.count != null ? `${l.category} (${num(l.count)} فاتورة)` : l.category} v={money(l.amount)} />
+        ))
+      ) : (
+        <Row l="لا يوجد" v="—" />
+      )}
       <Row l={<b>إجمالي الإيرادات</b>} v={<b>{money(total)}</b>} />
     </>
   );

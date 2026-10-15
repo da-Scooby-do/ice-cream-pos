@@ -70,21 +70,9 @@ export function PayTile({ t }: { t: Totals }) {
         {t.sales_cash > 0 && <span style={{ width: `${cashPct}%`, background: COLOR.cash }} />}
         {t.sales_bank > 0 && <span style={{ width: `${100 - cashPct}%`, background: COLOR.bank }} />}
       </div>
-      <div className="mt-2 space-y-0.5 text-sm">
-        <p className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-[3px]" style={{ background: COLOR.cash }} />
-          <Banknote size={14} className="text-ink-400" /> نقدي
-          <span className="flex-1" />
-          <b className="tnum">{money(t.sales_cash)}</b>
-          <span className="text-ink-400 tnum text-xs w-9 text-end">{pct(t.sales_cash, t.sales)}</span>
-        </p>
-        <p className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-[3px]" style={{ background: COLOR.bank }} />
-          <Landmark size={14} className="text-ink-400" /> تحويل
-          <span className="flex-1" />
-          <b className="tnum">{money(t.sales_bank)}</b>
-          <span className="text-ink-400 tnum text-xs w-9 text-end">{pct(t.sales_bank, t.sales)}</span>
-        </p>
+      <div className="mt-2 space-y-1.5 text-sm">
+        <PayLine color={COLOR.cash} icon={<Banknote size={14} />} label="نقدي" amount={t.sales_cash} count={t.orders_cash} share={pct(t.sales_cash, t.sales)} />
+        <PayLine color={COLOR.bank} icon={<Landmark size={14} />} label="تحويل" amount={t.sales_bank} count={t.orders_bank} share={pct(t.sales_bank, t.sales)} />
       </div>
       {t.voids > 0 && <p className="text-xs mt-1 text-ink-400">{num(t.voids)} فاتورة ملغاة</p>}
     </div>
@@ -104,7 +92,10 @@ export function Lines({ title, lines, total, tone }: { title: string; lines: Mon
         <ul className="space-y-1.5 text-sm">
           {lines.map((l) => (
             <li key={l.category} className="flex items-center gap-3">
-              <span className="flex-1">{l.category}</span>
+              <span className="flex-1">
+                {l.category}
+                {l.count != null && <span className="text-xs text-ink-400 tnum"> · {num(l.count)} فاتورة</span>}
+              </span>
               <span className="w-24 h-1.5 rounded-full bg-ink-50 overflow-hidden hidden sm:block">
                 <span
                   className={`block h-full rounded-full ${tone === "good" ? "bg-inflow" : "bg-outflow"}`}
@@ -285,6 +276,8 @@ export function MonthView({ m }: { m: MonthStatement }) {
                   <tr>
                     <th>اليوم</th>
                     <th className="!text-end">فواتير</th>
+                    <th className="!text-end">نقدي</th>
+                    <th className="!text-end">تحويل</th>
                     <th className="!text-end">الإيرادات</th>
                     <th className="!text-end">المصروفات</th>
                     <th className="!text-end">الصافي</th>
@@ -298,6 +291,8 @@ export function MonthView({ m }: { m: MonthStatement }) {
                         <span className="block h-1 mt-1 rounded-full bg-inflow" style={{ width: `${(d.income / maxIncome) * 100}%` }} />
                       </td>
                       <td className="text-end tnum">{num(d.orders)}</td>
+                      <PayCell amount={d.cash} count={d.orders_cash} />
+                      <PayCell amount={d.bank} count={d.orders_bank} />
                       <td className="text-end tnum whitespace-nowrap text-inflow-text">{money(d.income)}</td>
                       <td className="text-end tnum whitespace-nowrap text-outflow-text">{d.expenses ? money(d.expenses) : "—"}</td>
                       <td className={`text-end tnum whitespace-nowrap font-semibold ${d.net < 0 ? "text-outflow-text" : ""}`}>
@@ -325,5 +320,48 @@ function Info({ label, value }: { label: string; value: string }) {
       <p className="text-xs font-semibold text-ink-400">{label}</p>
       <p className="font-bold tnum mt-1">{value}</p>
     </div>
+  );
+}
+
+function PayLine({
+  color,
+  icon,
+  label,
+  amount,
+  count,
+  share,
+}: {
+  color: string;
+  icon: React.ReactNode;
+  label: string;
+  amount: number;
+  count?: number;
+  share: string;
+}) {
+  return (
+    <div>
+      <p className="flex items-center gap-1.5">
+        <span className="w-2.5 h-2.5 rounded-[3px] shrink-0" style={{ background: color }} />
+        <span className="text-ink-400">{icon}</span>
+        {label}
+        <span className="flex-1" />
+        <b className="tnum whitespace-nowrap">{money(amount)}</b>
+      </p>
+      <p className="text-xs text-ink-400 tnum ps-4">
+        {count != null && <>{num(count)} فاتورة · </>}
+        {share}
+      </p>
+    </div>
+  );
+}
+
+/** مبلغ + عدد الفواتير | amount with its number of receipts */
+function PayCell({ amount, count }: { amount?: number; count?: number }) {
+  if (amount == null) return <td className="text-end text-ink-300">—</td>;
+  return (
+    <td className="text-end tnum whitespace-nowrap">
+      {amount ? num(amount) : "—"}
+      {count ? <span className="block text-[11px] text-ink-400">{num(count)} فاتورة</span> : null}
+    </td>
   );
 }

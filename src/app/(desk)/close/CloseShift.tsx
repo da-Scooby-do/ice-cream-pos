@@ -115,7 +115,10 @@ export default function CloseShift({
             {live.income_lines.length ? (
               live.income_lines.map((l) => (
                 <div key={l.category} className="flex justify-between text-sm">
-                  <span>{l.category}</span>
+                  <span>
+                    {l.category}
+                    {l.count != null && <span className="text-xs text-ink-400 tnum"> · {num(l.count)} فاتورة</span>}
+                  </span>
                   <span className="tnum font-semibold">{money(l.amount)}</span>
                 </div>
               ))

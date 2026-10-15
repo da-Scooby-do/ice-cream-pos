@@ -35,9 +35,11 @@ function where(scope: Scope, alias: string) {
 
 export function totals(scope: Scope): Totals {
   const o = where(scope, "o");
-  const s = get<{ orders: number; voids: number; cash: number; bank: number }>(
+  const s = get<{ orders: number; voids: number; cash: number; bank: number; n_cash: number; n_bank: number }>(
     `SELECT COALESCE(SUM(o.voided_at IS NULL), 0) AS orders,
             COALESCE(SUM(o.voided_at IS NOT NULL), 0) AS voids,
+            COALESCE(SUM(o.voided_at IS NULL AND o.payment = 'cash'), 0) AS n_cash,
+            COALESCE(SUM(o.voided_at IS NULL AND o.payment = 'bank'), 0) AS n_bank,
             COALESCE(SUM(CASE WHEN o.voided_at IS NULL AND o.payment = 'cash' THEN o.total END), 0) AS cash,
             COALESCE(SUM(CASE WHEN o.voided_at IS NULL AND o.payment = 'bank' THEN o.total END), 0) AS bank
      FROM orders o WHERE ${o.sql}`,
@@ -57,6 +59,8 @@ export function totals(scope: Scope): Totals {
     voids: Number(s.voids),
     sales_cash: round2(Number(s.cash)),
     sales_bank: round2(Number(s.bank)),
+    orders_cash: Number(s.n_cash),
+    orders_bank: Number(s.n_bank),
     sales,
     other_income: round2(Number(e.inc)),
     income,
@@ -77,8 +81,8 @@ function moneyLines(scope: Scope, kind: "income" | "expense"): MoneyLine[] {
 
 function incomeLines(scope: Scope, t: Totals): MoneyLine[] {
   const lines: MoneyLine[] = [];
-  if (t.sales_cash) lines.push({ category: "مبيعات نقدية", amount: t.sales_cash });
-  if (t.sales_bank) lines.push({ category: "مبيعات تحويل بنكي", amount: t.sales_bank });
+  if (t.sales_cash) lines.push({ category: "مبيعات نقدية", amount: t.sales_cash, count: t.orders_cash });
+  if (t.sales_bank) lines.push({ category: "مبيعات تحويل بنكي", amount: t.sales_bank, count: t.orders_bank });
   return lines.concat(moneyLines(scope, "income"));
 }
 
@@ -166,8 +170,12 @@ export function dayStatement(date: string): DayStatement {
 // --- الكشف الشهري | monthly statement ----------------------------------------
 
 export function dayRows(from: string, to: string): DayRow[] {
-  const orders = all<{ d: string; n: number; v: number }>(
-    `SELECT business_date AS d, COUNT(*) AS n, ROUND(SUM(total), 2) AS v FROM orders
+  const orders = all<{ d: string; n: number; v: number; cash: number; bank: number; n_cash: number; n_bank: number }>(
+    `SELECT business_date AS d, COUNT(*) AS n, ROUND(SUM(total), 2) AS v,
+            COALESCE(SUM(CASE WHEN payment = 'cash' THEN total END), 0) AS cash,
+            COALESCE(SUM(CASE WHEN payment = 'bank' THEN total END), 0) AS bank,
+            SUM(payment = 'cash') AS n_cash, SUM(payment = 'bank') AS n_bank
+     FROM orders
      WHERE business_date BETWEEN $from AND $to AND voided_at IS NULL GROUP BY business_date`,
     { from, to }
   );
@@ -182,7 +190,7 @@ export function dayRows(from: string, to: string): DayRow[] {
   const row = (d: string) => {
     let r = map.get(d);
     if (!r) {
-      r = { date: d, orders: 0, income: 0, expenses: 0, net: 0 };
+      r = { date: d, orders: 0, income: 0, expenses: 0, net: 0, cash: 0, bank: 0, orders_cash: 0, orders_bank: 0 };
       map.set(d, r);
     }
     return r;
@@ -191,6 +199,10 @@ export function dayRows(from: string, to: string): DayRow[] {
     const r = row(o.d);
     r.orders = Number(o.n);
     r.income += Number(o.v);
+    r.cash = round2(Number(o.cash));
+    r.bank = round2(Number(o.bank));
+    r.orders_cash = Number(o.n_cash);
+    r.orders_bank = Number(o.n_bank);
   }
   for (const m of money) {
     const r = row(m.d);

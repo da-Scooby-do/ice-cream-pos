@@ -6,7 +6,7 @@ import { useState } from "react";
 import { voidEntryAction } from "@/actions/sales";
 import EntryDialog from "@/components/EntryDialog";
 import { ErrorNote, useAction } from "@/components/ui";
-import { money } from "@/lib/format";
+import { money, num } from "@/lib/format";
 import { clock, shortDate } from "@/lib/time";
 import type { EntryRow, Totals } from "@/lib/types";
 
@@ -88,11 +88,17 @@ export default function MoneyBoard({
           </div>
           <div className="rounded-2xl bg-emerald-50/60 ring-1 ring-emerald-100 px-4 py-3 space-y-1 text-sm">
             <div className="flex justify-between">
-              <span>مبيعات نقدية</span>
+              <span>
+                مبيعات نقدية
+                {totals.orders_cash != null && <span className="text-xs text-ink-400 tnum"> · {num(totals.orders_cash)} فاتورة</span>}
+              </span>
               <span className="tnum font-semibold">{money(totals.sales_cash)}</span>
             </div>
             <div className="flex justify-between">
-              <span>مبيعات تحويل بنكي</span>
+              <span>
+                مبيعات تحويل بنكي
+                {totals.orders_bank != null && <span className="text-xs text-ink-400 tnum"> · {num(totals.orders_bank)} فاتورة</span>}
+              </span>
               <span className="tnum font-semibold">{money(totals.sales_bank)}</span>
             </div>
           </div>

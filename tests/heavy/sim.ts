@@ -239,11 +239,11 @@ async function main() {
   expectFail("negative opening", () => openShift(ali.id, { kind: "day", opening_cash: -5 }));
 
   // ---- independent ledger ----------------------------------------------------
-  type Day = { cash: number; bank: number; orders: number; voids: number; inc: number; exp: number };
+  type Day = { cash: number; bank: number; orders: number; voids: number; inc: number; exp: number; nCash: number; nBank: number };
   const days = new Map<string, Day>();
   const D = (d: string) => {
     let x = days.get(d);
-    if (!x) days.set(d, (x = { cash: 0, bank: 0, orders: 0, voids: 0, inc: 0, exp: 0 }));
+    if (!x) days.set(d, (x = { cash: 0, bank: 0, orders: 0, voids: 0, inc: 0, exp: 0, nCash: 0, nBank: 0 }));
     return x;
   };
   const prodQty = new Map<string, number>(); // month|key -> qty (non-voided)
@@ -306,6 +306,8 @@ async function main() {
     const o: O = { id: rc.order_id, date, month: ymOf(date), total, payment, shift: shiftId, lines, use };
     const d = D(date);
     d.orders++;
+    if (payment === "cash") d.nCash++;
+    else d.nBank++;
     if (payment === "cash") {
       d.cash = r2(d.cash + total);
       shiftDrawer.set(shiftId, r2(shiftDrawer.get(shiftId)! + total));
@@ -321,6 +323,8 @@ async function main() {
     const d = D(o.date);
     d.orders--;
     d.voids++;
+    if (o.payment === "cash") d.nCash--;
+    else d.nBank--;
     if (o.payment === "cash") {
       d.cash = r2(d.cash - o.total);
       if (shiftOpen || true) shiftDrawer.set(o.shift, r2(shiftDrawer.get(o.shift)! - o.total));
@@ -526,6 +530,10 @@ async function main() {
     eq(`${date} voids`, s.totals.voids, d.voids);
     eq(`${date} cash`, s.totals.sales_cash, d.cash);
     eq(`${date} bank`, s.totals.sales_bank, d.bank);
+    eq(`${date} cash receipts`, s.totals.orders_cash, d.nCash);
+    eq(`${date} bank receipts`, s.totals.orders_bank, d.nBank);
+    const cashLine = s.income_lines.find((l) => l.category === "مبيعات نقدية");
+    if (d.nCash) eq(`${date} cash line count`, cashLine?.count, d.nCash);
     eq(`${date} other income`, s.totals.other_income, d.inc);
     eq(`${date} expenses`, s.totals.expenses, d.exp);
     eq(`${date} net`, s.totals.net, r2(d.cash + d.bank + d.inc - d.exp));
@@ -549,6 +557,14 @@ async function main() {
     eq(`${ym} expenses`, m.totals.expenses, sum((d) => d.exp));
     eq(`${ym} net`, m.totals.net, sum((d) => d.cash + d.bank + d.inc - d.exp));
     eq(`${ym} days sum net`, r2(m.days.reduce((a, d) => a + d.net, 0)), m.totals.net);
+    for (const row of m.days) {
+      const dd = days.get(row.date);
+      if (!dd) continue;
+      eq(`${row.date} month row cash`, row.cash, dd.cash);
+      eq(`${row.date} month row bank`, row.bank, dd.bank);
+      eq(`${row.date} month row cash receipts`, row.orders_cash, dd.nCash);
+      eq(`${row.date} month row bank receipts`, row.orders_bank, dd.nBank);
+    }
     eq(`${ym} products revenue = sales`, r2(m.products.reduce((a, p) => a + p.revenue, 0)), m.totals.sales);
     yearSales += m.totals.sales;
     for (const p of m.products) eq(`${ym} qty ${p.product}|${p.size ?? ""}`, p.qty, prodQty.get(`${ym}|${p.product}|${p.size ?? ""}`) ?? 0);
