@@ -53,4 +53,4 @@ publish:
   - provider: github
     owner: da-Scooby-do
     repo: ice-cream-pos
-    releaseType: release
+    releaseType: draft
