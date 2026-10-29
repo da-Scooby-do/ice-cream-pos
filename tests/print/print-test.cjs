@@ -56,8 +56,11 @@ app.whenReady().then(async () => {
     // the file port writes to one fixed path: move it aside per mode
     const target = process.env.TEST_FILE;
     if (target && fs.existsSync(target)) {
-      fs.renameSync(target, path.join(OUT, `${mode}.xps`));
-      console.log(`  file ${mode}.xps ${fs.statSync(path.join(OUT, `${mode}.xps`)).size} bytes`);
+      const head = fs.readFileSync(target).subarray(0, 4).toString("latin1");
+      const ext = head.startsWith("%PDF") ? "pdf" : head.startsWith("PK") ? "xps" : "bin";
+      const dest = path.join(OUT, `${mode}.${ext}`);
+      fs.renameSync(target, dest);
+      console.log(`  file ${path.basename(dest)} ${fs.statSync(dest).size} bytes`);
     } else console.log(`  no file written for ${mode}`, [...fs.readdirSync(OUT)].filter((f) => !before.has(f)));
   }
   app.quit();

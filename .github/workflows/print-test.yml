@@ -13,22 +13,31 @@ jobs:
           cache: npm
       - name: Install
         run: npm ci
-      - name: Add a file printer (XPS)
+      - name: Add a file printer
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force C:\printout | Out-Null
-          Add-PrinterPort -Name 'C:\printout\job.xps'
-          Add-Printer -Name 'XPSFile' -DriverName 'Microsoft XPS Document Writer v4' -PortName 'C:\printout\job.xps'
+          "Drivers on this machine:"; Get-PrinterDriver | Format-Table Name
+          $want = @('Microsoft Print To PDF', 'Microsoft XPS Document Writer v4', 'Microsoft XPS Document Writer')
+          foreach ($d in $want) { try { Add-PrinterDriver -Name $d -ErrorAction Stop; "added driver $d" } catch { "cannot add $d" } }
+          $have = (Get-PrinterDriver).Name
+          $driver = $want | Where-Object { $have -contains $_ } | Select-Object -First 1
+          if (-not $driver) { $driver = ($have | Select-Object -First 1) }
+          "Using driver: $driver"
+          Add-PrinterPort -Name 'C:\printout\job.out'
+          Add-Printer -Name 'FilePrinter' -DriverName $driver -PortName 'C:\printout\job.out'
           Get-Printer | Format-Table Name, DriverName, PortName
       - name: Print the receipt four ways
         shell: pwsh
         env:
-          TEST_PRINTER: XPSFile
-          TEST_FILE: C:\printout\job.xps
+          TEST_PRINTER: FilePrinter
+          TEST_FILE: C:\printout\job.out
           TEST_OUT: C:\printout\results
         run: npx electron tests/print/print-test.cjs
       - name: Report
-        run: python tests/print/xps-report.py C:\printout\results
+        run: |
+          pip install pymupdf --quiet
+          python tests/print/xps-report.py C:\printout\results
       - uses: actions/upload-artifact@v4
         with:
           name: printouts
