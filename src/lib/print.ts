@@ -48,22 +48,6 @@ export function useIsDesktop(): boolean {
 
 const PX_TO_MICRONS = 25400 / 96;
 
-/**
- * اجعل مقاس صفحة الطباعة = طول القسيمة | make the CSS page exactly as long as
- * the slip. Chromium honours CSS @page size over the size passed to print();
- * if the two differ it scales the slip down to fit (a tiny receipt).
- */
-function setPageSize(heightMicrons: number) {
-  let el = document.getElementById("slip-page-size") as HTMLStyleElement | null;
-  if (!el) {
-    el = document.createElement("style");
-    el.id = "slip-page-size";
-    document.head.appendChild(el);
-  }
-  const mm = Math.ceil(heightMicrons / 1000);
-  el.textContent = `@media print { @page { size: 80mm ${mm}mm; margin: 0; } }`;
-}
-
 /** طول القسيمة بالميكرون (+10 مم ليتجاوز القاطع آخر سطر) | slip length + 10 mm for the cutter */
 function measure(root: HTMLElement): number {
   const px = root.getBoundingClientRect().height;
@@ -84,7 +68,9 @@ export async function printSlip(): Promise<{ ok: boolean; error?: string }> {
     );
     const heightMicrons = measure(root);
     root.classList.remove("measuring");
-    setPageSize(heightMicrons);
+    // No CSS @page size on purpose: the paper size goes to the printer only.
+    // A CSS size shrank receipts (2.0.5) or made the Xprinter driver cancel
+    // the job (2.0.6). Without it the slip prints 1:1 on the paper given.
     if (!window.desktop) {
       // a normal browser: its print dialog, at the same 80 mm page
       window.print();

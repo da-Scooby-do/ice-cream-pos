@@ -119,9 +119,9 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 
 @media print {
-  /* The page SIZE is set right before each print to the slip's measured
-     length (see src/lib/print.ts). A fixed size here made the printer shrink
-     a short receipt to fit the longer page. */
+  /* No page SIZE here on purpose — the desktop app sends the paper size to
+     the printer (src/lib/print.ts). A CSS size made Chromium shrink the slip
+     or the Xprinter driver cancel the job. */
   @page {
     margin: 0;
   }

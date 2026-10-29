@@ -228,23 +228,27 @@ async function printFrom(webContents, heightMicrons) {
     return { ok: false, error: `الطابعة «${cfg.printer}» غير متصلة` };
   }
   const height = Math.max(50_000, Math.min(Math.round(Number(heightMicrons) || 200_000), 3_000_000));
-  return new Promise((resolve) => {
-    webContents.print(
-      {
-        silent: true,
-        printBackground: true,
-        deviceName: cfg.printer || undefined,
-        margins: { marginType: "none" },
-        pageSize: { width: 80_000, height },
-        scaleFactor: 100,
-        copies: 1,
-      },
-      (ok, reason) => {
-        if (!ok) log("print failed", reason);
-        resolve(ok ? { ok: true } : { ok: false, error: reason || "تعذرت الطباعة" });
-      }
-    );
-  });
+  const base = {
+    silent: true,
+    printBackground: true,
+    deviceName: cfg.printer || undefined,
+    margins: { marginType: "none" },
+    scaleFactor: 100,
+    copies: 1,
+  };
+  const attempt = (opts) =>
+    new Promise((resolve) => webContents.print(opts, (ok, reason) => resolve({ ok, reason })));
+
+  // 1) ورق بطول الفاتورة بالضبط | paper exactly as long as the slip
+  const first = await attempt({ ...base, pageSize: { width: 80_000, height } });
+  if (first.ok) return { ok: true };
+  log("print with slip-length paper failed:", first.reason, "— retrying with the printer's own paper");
+  // 2) بعض التعريفات ترفض المقاس المخصص: اطبع على ورق الطابعة نفسها
+  //    some drivers reject a custom size: print on the printer's own paper
+  const second = await attempt(base);
+  if (second.ok) return { ok: true };
+  log("print failed:", second.reason);
+  return { ok: false, error: second.reason || first.reason || "تعذرت الطباعة" };
 }
 
 // --- التحديثات | automatic updates (GitHub releases) ------------------------------
