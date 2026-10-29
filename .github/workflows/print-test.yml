@@ -1,0 +1,35 @@
+name: Print test (Windows)
+# تجربة الطباعة على ويندوز | prints a test receipt to a file printer on Windows
+on:
+  workflow_dispatch:
+jobs:
+  print:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Add a file printer (XPS)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force C:\printout | Out-Null
+          Add-PrinterPort -Name 'C:\printout\job.xps'
+          Add-Printer -Name 'XPSFile' -DriverName 'Microsoft XPS Document Writer v4' -PortName 'C:\printout\job.xps'
+          Get-Printer | Format-Table Name, DriverName, PortName
+      - name: Print the receipt four ways
+        shell: pwsh
+        env:
+          TEST_PRINTER: XPSFile
+          TEST_FILE: C:\printout\job.xps
+          TEST_OUT: C:\printout\results
+        run: npx electron tests/print/print-test.cjs
+      - name: Report
+        run: python tests/print/xps-report.py C:\printout\results
+      - uses: actions/upload-artifact@v4
+        with:
+          name: printouts
+          path: C:\printout\results
