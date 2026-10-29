@@ -224,13 +224,14 @@ function fatal(message) {
 // الصامتة إليها تفتح نافذة «حفظ» ثم تُلغى. | Windows "printers" that save a file
 // or send a fax: silent printing to them opens a Save dialog and gets cancelled.
 const VIRTUAL_PRINTER = /pdf|xps|onenote|fax|document writer|send to|snagit|anydesk|cutepdf/i;
-const RECEIPT_PRINTER = /xprinter|xp-?\d|pos[-\s]?\d|pos58|pos80|receipt|thermal|80\s?mm|58\s?mm|epson tm|rongta|gprinter|sewoo|bixolon|star tsp/i;
+const RECEIPT_PRINTER =
+  /rongta|\brp[-\s]?\d{2,3}|ace[-\s]?v1|xprinter|xp-?\d|pos[-\s]?\d|pos58|pos80|receipt|thermal|80\s?mm|58\s?mm|epson tm|gprinter|sewoo|bixolon|star tsp/i;
 
 /** اختر طابعة الفواتير | which printer a receipt goes to (or why none) */
 function pickPrinter(printers, chosen) {
   if (chosen) {
     if (!printers.some((p) => p.name === chosen)) return { error: `الطابعة «${chosen}» غير متصلة — شغّلها أو اخترها من جديد في الإعدادات ← الطابعة` };
-    if (VIRTUAL_PRINTER.test(chosen)) return { error: `«${chosen}» ليست طابعة فواتير — اختر طابعة Xprinter من الإعدادات ← الطابعة` };
+    if (VIRTUAL_PRINTER.test(chosen)) return { error: `«${chosen}» ليست طابعة فواتير — اختر طابعة الفواتير (Rongta) من الإعدادات ← الطابعة` };
     return { name: chosen };
   }
   const def = printers.find((p) => p.isDefault);
@@ -239,7 +240,7 @@ function pickPrinter(printers, chosen) {
   const receipt = printers.find((p) => RECEIPT_PRINTER.test(`${p.name} ${p.displayName || ""}`) && !VIRTUAL_PRINTER.test(p.name));
   if (receipt) return { name: receipt.name };
   return {
-    error: `لم تُختر طابعة الفواتير، والطابعة الافتراضية في ويندوز هي «${def?.displayName || def?.name || "—"}» (ليست طابعة فواتير). اختر طابعة Xprinter من الإعدادات ← الطابعة`,
+    error: `لم تُختر طابعة الفواتير، والطابعة الافتراضية في ويندوز هي «${def?.displayName || def?.name || "—"}» (ليست طابعة فواتير). اختر طابعة الفواتير (Rongta) من الإعدادات ← الطابعة`,
   };
 }
 

@@ -181,7 +181,7 @@ function PrinterCard({ shop }: { shop: Shop }) {
         <p className="text-sm text-ink-400">إعدادات الطابعة متاحة داخل برنامج اللابتوب.</p>
       ) : (
         <div className="space-y-3">
-          <Field label="طابعة الفواتير" hint="اختر طابعة Xprinter — الطباعة تتم مباشرة بدون نافذة">
+          <Field label="طابعة الفواتير" hint="اختر طابعة Rongta (مثل RP80 أو RONGTA 80mm) — الطباعة تتم مباشرة بدون نافذة">
             <select
               className="input"
               value={printer}
@@ -205,22 +205,22 @@ function PrinterCard({ shop }: { shop: Shop }) {
             const chosen = printers.find((p) => p.name === printer);
             const receipts = printers.filter((p) => p.receipt);
             if (chosen?.virtual)
-              return <ErrorNote error={`«${chosen.displayName || chosen.name}» تحفظ ملفاً ولا تطبع على الورق — اختر طابعة Xprinter.`} />;
+              return <ErrorNote error={`«${chosen.displayName || chosen.name}» تحفظ ملفاً ولا تطبع على الورق — اختر طابعة Rongta.`} />;
             if (!printer && !receipts.length && printers.length > 0)
               return (
                 <p className="text-sm font-semibold text-outflow-text bg-outflow-soft rounded-xl px-3 py-2.5">
-                  لا تظهر طابعة Xprinter في القائمة. تأكد أن الطابعة موصولة ومشغّلة وأن تعريفها (Driver) مثبت على ويندوز، ثم أعد فتح هذه الصفحة.
+                  لا تظهر طابعة الفواتير (Rongta) في القائمة. تأكد أن الطابعة موصولة ومشغّلة وأن تعريفها (Driver) مثبت على ويندوز، ثم أعد فتح هذه الصفحة.
                 </p>
               );
             if (!printer)
-              return <p className="text-sm text-ink-500">اختر طابعة Xprinter من القائمة (عليها 🧾) — وإلا يحاول البرنامج إيجادها تلقائياً.</p>;
+              return <p className="text-sm text-ink-500">اختر طابعة الفواتير Rongta من القائمة (عليها 🧾) — وإلا يحاول البرنامج إيجادها تلقائياً.</p>;
             return null;
           })()}
           <div className="flex flex-wrap gap-2">
             <PrintButton slip={<ReceiptSlip r={{ ...SAMPLE, number: 0 }} shop={shop} />} label="طباعة فاتورة تجربة" />
           </div>
           <p className="text-xs text-ink-400">
-            لفتح درج النقود تلقائياً: في إعدادات طابعة Xprinter داخل ويندوز فعّل «Open cash drawer» بعد الطباعة.
+            لفتح درج النقود تلقائياً: في خصائص طابعة Rongta داخل ويندوز فعّل فتح الدرج (Cash Drawer) بعد الطباعة.
           </p>
           <Toggle
             checked={fullscreen}
