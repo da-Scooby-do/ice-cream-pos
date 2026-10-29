@@ -159,7 +159,9 @@ function ShopCard({ shop }: { shop: Shop }) {
 // --- الطابعة | printer ----------------------------------------------------------
 
 function PrinterCard({ shop }: { shop: Shop }) {
-  const [printers, setPrinters] = useState<{ name: string; displayName: string; isDefault: boolean }[]>([]);
+  const [printers, setPrinters] = useState<
+    { name: string; displayName: string; isDefault: boolean; virtual?: boolean; receipt?: boolean }[]
+  >([]);
   const [printer, setPrinter] = useState<string>("");
   const [fullscreen, setFullscreen] = useState(true);
   const desktop = useIsDesktop();
@@ -188,15 +190,32 @@ function PrinterCard({ shop }: { shop: Shop }) {
                 await window.desktop?.setConfig({ printer: e.target.value || null });
               }}
             >
-              <option value="">الطابعة الافتراضية في ويندوز</option>
+              <option value="">— اختر طابعة الفواتير —</option>
               {printers.map((p) => (
                 <option key={p.name} value={p.name}>
+                  {p.receipt ? "🧾 " : ""}
                   {p.displayName || p.name}
-                  {p.isDefault ? " (الافتراضية)" : ""}
+                  {p.isDefault ? " (الافتراضية في ويندوز)" : ""}
+                  {p.virtual ? " — ليست طابعة فواتير" : ""}
                 </option>
               ))}
             </select>
           </Field>
+          {(() => {
+            const chosen = printers.find((p) => p.name === printer);
+            const receipts = printers.filter((p) => p.receipt);
+            if (chosen?.virtual)
+              return <ErrorNote error={`«${chosen.displayName || chosen.name}» تحفظ ملفاً ولا تطبع على الورق — اختر طابعة Xprinter.`} />;
+            if (!printer && !receipts.length && printers.length > 0)
+              return (
+                <p className="text-sm font-semibold text-outflow-text bg-outflow-soft rounded-xl px-3 py-2.5">
+                  لا تظهر طابعة Xprinter في القائمة. تأكد أن الطابعة موصولة ومشغّلة وأن تعريفها (Driver) مثبت على ويندوز، ثم أعد فتح هذه الصفحة.
+                </p>
+              );
+            if (!printer)
+              return <p className="text-sm text-ink-500">اختر طابعة Xprinter من القائمة (عليها 🧾) — وإلا يحاول البرنامج إيجادها تلقائياً.</p>;
+            return null;
+          })()}
           <div className="flex flex-wrap gap-2">
             <PrintButton slip={<ReceiptSlip r={{ ...SAMPLE, number: 0 }} shop={shop} />} label="طباعة فاتورة تجربة" />
           </div>
