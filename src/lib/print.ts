@@ -48,14 +48,31 @@ export function useIsDesktop(): boolean {
 
 const PX_TO_MICRONS = 25400 / 96;
 
+/**
+ * اجعل مقاس صفحة الطباعة = طول القسيمة | make the CSS page exactly as long as
+ * the slip. Chromium honours CSS @page size over the size passed to print();
+ * if the two differ it scales the slip down to fit (a tiny receipt).
+ */
+function setPageSize(heightMicrons: number) {
+  let el = document.getElementById("slip-page-size") as HTMLStyleElement | null;
+  if (!el) {
+    el = document.createElement("style");
+    el.id = "slip-page-size";
+    document.head.appendChild(el);
+  }
+  const mm = Math.ceil(heightMicrons / 1000);
+  el.textContent = `@media print { @page { size: 80mm ${mm}mm; margin: 0; } }`;
+}
+
+/** طول القسيمة بالميكرون (+10 مم ليتجاوز القاطع آخر سطر) | slip length + 10 mm for the cutter */
+function measure(root: HTMLElement): number {
+  const px = root.getBoundingClientRect().height;
+  return Math.max(Math.ceil(px * PX_TO_MICRONS) + 10_000, 50_000);
+}
+
 export async function printSlip(): Promise<{ ok: boolean; error?: string }> {
   const root = document.querySelector<HTMLElement>(".print-root");
   if (!root || !root.firstElementChild) return { ok: false, error: "لا يوجد ما يُطبع" };
-
-  if (!window.desktop) {
-    window.print();
-    return { ok: true };
-  }
 
   root.classList.add("measuring");
   try {
@@ -65,10 +82,14 @@ export async function printSlip(): Promise<{ ok: boolean; error?: string }> {
         img.complete ? null : new Promise((r) => ((img.onload = r), (img.onerror = r)))
       )
     );
-    const px = root.getBoundingClientRect().height;
-    // + 10 mm so the cutter clears the last line
-    const heightMicrons = Math.max(Math.ceil(px * PX_TO_MICRONS) + 10_000, 50_000);
+    const heightMicrons = measure(root);
     root.classList.remove("measuring");
+    setPageSize(heightMicrons);
+    if (!window.desktop) {
+      // a normal browser: its print dialog, at the same 80 mm page
+      window.print();
+      return { ok: true };
+    }
     return await window.desktop.print({ heightMicrons });
   } catch (e) {
     return { ok: false, error: (e as Error).message };
