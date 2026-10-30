@@ -12,12 +12,14 @@ import {
   Settings as SettingsIcon,
   Store,
   Usb,
+  Trash2,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { saveShopAction } from "@/actions/manage";
 import {
   backupNowAction,
+  clearTestDataAction,
   disconnectCloudAction,
   restoreCloudAction,
   restoreFileAction,
@@ -83,6 +85,7 @@ export default function Settings({
       <PrinterCard shop={shop} />
       <BackupCard b={backup} />
       <CloudCard s={sync} />
+      <ClearTestCard />
       <UpdatesCard version={version} />
     </Page>
   );
@@ -738,6 +741,65 @@ function UpdatesCard({ version }: { version: string }) {
         )}
       </div>
       <p className="text-xs text-ink-400 mt-2">التحديثات تُنزَّل تلقائياً عند توفر الإنترنت وتُثبَّت عند إغلاق البرنامج.</p>
+    </Card>
+  );
+}
+
+// بدء التشغيل الفعلي | clear the test data before the shop starts for real
+function ClearTestCard() {
+  const router = useRouter();
+  const clear = useAction();
+  const [open, setOpen] = useState(false);
+  const [word, setWord] = useState("");
+  const [done, setDone] = useState<string | null>(null);
+  return (
+    <Card title={<span className="flex items-center gap-2"><Trash2 size={18} /> بدء التشغيل الفعلي — مسح بيانات التجربة</span>}>
+      <div className="space-y-3">
+        <p className="text-sm text-ink-500">
+          يمسح كل الفواتير والورديات والإيرادات والمصروفات وحركة المخزون، ويُرجع للمخزون ما أخذته فواتير التجربة.
+          تبقى الأصناف والنكهات والأسعار والموظفون والإعدادات. أرقام الفواتير تبدأ من 1 من جديد.
+          تُحفظ نسخة احتياطية قبل المسح.
+        </p>
+        <button type="button" onClick={() => { setOpen(true); setWord(""); clear.setError(null); }} className="btn-soft px-4 py-2.5 text-red-700">
+          <Trash2 size={16} /> مسح بيانات التجربة…
+        </button>
+        {done && <OkNote>{done}</OkNote>}
+      </div>
+      {open && (
+        <Modal title="مسح بيانات التجربة" onClose={() => setOpen(false)}>
+          <div className="space-y-3">
+            <p className="text-sm">
+              سيُمسح <b>كل</b> البيع والورديات والإيرادات والمصروفات المسجلة حتى الآن. استخدمه مرة واحدة قبل بدء العمل الفعلي.
+            </p>
+            <Field label="اكتب كلمة «مسح» للتأكيد">
+              <input className="input" value={word} onChange={(e) => setWord(e.target.value)} autoFocus />
+            </Field>
+            <ErrorNote error={clear.error} />
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" className="btn-soft py-3" onClick={() => setOpen(false)}>
+                إلغاء
+              </button>
+              <button
+                type="button"
+                disabled={clear.pending || word.trim() !== "مسح"}
+                className="py-3 rounded-2xl font-bold bg-red-600 text-white disabled:opacity-40"
+                onClick={() =>
+                  clear.run(
+                    () => clearTestDataAction(word),
+                    (r) => {
+                      setOpen(false);
+                      setDone(`تم المسح ✓ — ${num(r.orders)} فاتورة، ${num(r.shifts)} وردية، ${num(r.money)} إيراد/مصروف. البرنامج جاهز للعمل الفعلي.`);
+                      router.refresh();
+                    }
+                  )
+                }
+              >
+                {clear.pending ? "جاري المسح…" : "مسح نهائياً"}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </Card>
   );
 }

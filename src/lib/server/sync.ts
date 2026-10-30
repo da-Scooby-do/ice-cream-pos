@@ -88,6 +88,12 @@ function queueSnapshot(key: string) {
   run("INSERT OR IGNORE INTO snapshot_queue (key) VALUES ($key)", { key });
 }
 
+/** أعد نشر تقارير هذه الأيام | republish the reports of these days (e.g. after clearing them) */
+export function queueReportsFor(dates: string[]) {
+  for (const d of dates) queueSnapshotsForDate(d);
+  queueSnapshot("stock");
+}
+
 function queueSnapshotsForDate(date: string) {
   queueSnapshot(`day:${date}`);
   queueSnapshot(`month:${monthOf(date)}`);

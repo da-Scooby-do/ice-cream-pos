@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getMeta, setMeta } from "@/lib/db/sqlite";
 import { act, fail } from "@/lib/server/errors";
 import { makeBackup, restoreFromFile } from "@/lib/server/backup";
+import { clearTestData } from "@/lib/server/reset";
 import {
   normalizeUrl,
   queueFullSync,
@@ -22,6 +23,17 @@ export async function backupNowAction() {
     await requireDesk("admin");
     const r = await makeBackup("manual");
     revalidatePath("/settings");
+    return r;
+  });
+}
+
+/** مسح بيانات التجربة | clear test sales, shifts, money and stock moves (backup first) */
+export async function clearTestDataAction(confirm: string) {
+  return act(async () => {
+    await requireDesk("admin");
+    if (confirm.trim() !== "مسح") fail("اكتب كلمة «مسح» للتأكيد");
+    const r = await clearTestData();
+    revalidatePath("/", "layout");
     return r;
   });
 }
