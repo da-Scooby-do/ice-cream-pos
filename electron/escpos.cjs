@@ -422,4 +422,9 @@ function textTest() {
   ]);
 }
 
-module.exports = { renderSlip, toEscPos, sendRaw, setupGenericPrinter, textTest, inkOf, DOTS };
+/** صورة رسمتها صفحة البرنامج | a PNG data URL drawn by the app's page */
+function fromDataUrl(url) {
+  return fromImage(nativeImage.createFromDataURL(url));
+}
+
+module.exports = { renderSlip, fromDataUrl, toEscPos, sendRaw, setupGenericPrinter, textTest, inkOf, DOTS };

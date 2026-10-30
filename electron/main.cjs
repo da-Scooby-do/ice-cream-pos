@@ -282,8 +282,20 @@ async function printFrom(webContents, opts = {}) {
   if (raw) {
     try {
       const t0 = Date.now();
-      const bmp = await escpos.renderSlip(base(), opts.html, { prefer: cfg.render, log });
-      if (bmp.ink >= 300 && bmp.method !== cfg.render) writeCfg({ ...readCfg(), render: bmp.method });
+      // the picture the cashier screen drew itself; if it is empty, draw it here
+      let bmp = null;
+      if (typeof opts.png === "string" && opts.png.startsWith("data:image/png")) {
+        bmp = Object.assign(escpos.fromDataUrl(opts.png), { method: "page" });
+        log(`slip drawn by the page: ${bmp.width}x${bmp.height}, ink ${bmp.ink} (${opts.pngNote || ""})`);
+      } else if (opts.pngNote) {
+        log(`slip not drawn by the page: ${opts.pngNote}`);
+      }
+      if (!bmp || bmp.ink < 300) {
+        const page = bmp ? `page ink ${bmp.ink} (${opts.pngNote || ""})` : `page: ${opts.pngNote || "none"}`;
+        bmp = await escpos.renderSlip(base(), opts.html, { prefer: cfg.render, log });
+        bmp.tries.unshift(page);
+        if (bmp.ink >= 300 && bmp.method !== cfg.render) writeCfg({ ...readCfg(), render: bmp.method });
+      }
       // keep the last receipt picture: «فتح صورة آخر فاتورة» shows exactly what was sent
       try {
         fs.writeFileSync(lastReceiptPng(), bmp.png);

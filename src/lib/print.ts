@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { slipToPng } from "./slip-raster";
 
 // الطباعة | printing.
 //
@@ -28,7 +29,7 @@ export type PrinterConfig = {
 
 export type DesktopBridge = {
   isDesktop: true;
-  print(opts: { heightMicrons: number; html?: string; kick?: boolean }): Promise<{ ok: boolean; error?: string }>;
+  print(opts: { heightMicrons: number; html?: string; png?: string; pngNote?: string; kick?: boolean }): Promise<{ ok: boolean; error?: string }>;
   listPrinters(): Promise<{ name: string; displayName: string; isDefault: boolean; virtual?: boolean; receipt?: boolean }[]>;
   setupReceiptPrinter(): Promise<{ ok: boolean; port?: string; error?: string }>;
   testPrinter(): Promise<{ ok: boolean; printer?: string; error?: string }>;
@@ -81,6 +82,18 @@ export async function printSlip(opts: { kick?: boolean } = {}): Promise<{ ok: bo
       )
     );
     const heightMicrons = measure(root);
+    // the slip as a picture, drawn here where it is already laid out (direct printing)
+    let png: string | undefined;
+    let pngNote: string | undefined;
+    if (window.desktop && root.childElementCount === 1) {
+      try {
+        const pic = await slipToPng(root.firstElementChild as HTMLElement);
+        png = pic?.png;
+        pngNote = pic?.note;
+      } catch (e) {
+        pngNote = String((e as Error)?.message || e);
+      }
+    }
     root.classList.remove("measuring");
     // No CSS @page size on purpose: the paper size goes to the printer only.
     // A CSS size shrank receipts (2.0.5) or made the Xprinter driver cancel
@@ -90,8 +103,8 @@ export async function printSlip(opts: { kick?: boolean } = {}): Promise<{ ok: bo
       window.print();
       return { ok: true };
     }
-    // html: the slip itself, for direct ESC/POS printing (drawn by the app)
-    return await window.desktop.print({ heightMicrons, html: root.innerHTML, kick: !!opts.kick });
+    // png / html: the slip for direct ESC/POS printing (html is the backup way to draw it)
+    return await window.desktop.print({ heightMicrons, html: root.innerHTML, png, pngNote, kick: !!opts.kick });
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   } finally {
