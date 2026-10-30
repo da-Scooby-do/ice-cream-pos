@@ -30,7 +30,7 @@ import { PrintButton } from "@/components/PrintHost";
 import { ReceiptSlip } from "@/components/slips";
 import { ErrorNote, Field, Modal, NumInput, OkNote, Segmented, Toggle, useAction } from "@/components/ui";
 import { num } from "@/lib/format";
-import { useIsDesktop, type PrintMode, type RasterMode, type UpdateState } from "@/lib/print";
+import { useIsDesktop, type PrintMode, type RasterMode, type UpdateState, type UsbPort } from "@/lib/print";
 import { stamp } from "@/lib/time";
 import type { Receipt, Shop } from "@/lib/types";
 
@@ -169,10 +169,13 @@ function PrinterCard({ shop }: { shop: Shop }) {
   const [diag, setDiag] = useState<{ ok?: string; error?: string }>({});
   const [fullscreen, setFullscreen] = useState(true);
   const [setup, setSetup] = useState<{ busy: boolean; ok?: string; error?: string }>({ busy: false });
+  const [usb, setUsb] = useState<{ ports: UsbPort[]; current: string | null } | null>(null);
   const desktop = useIsDesktop();
 
+  const loadPorts = () => void window.desktop?.usbPorts?.().then(setUsb).catch(() => {});
   const load = () => {
     if (!window.desktop) return;
+    loadPorts();
     void window.desktop.listPrinters().then(setPrinters);
     void window.desktop.getConfig().then((c) => {
       setPrinter(c.printer ?? "");
@@ -232,7 +235,18 @@ function PrinterCard({ shop }: { shop: Shop }) {
               onClick={async () => {
                 setSetup({ busy: true });
                 const r = await window.desktop!.setupReceiptPrinter();
-                setSetup(r.ok ? { busy: false, ok: `تمت الإضافة على المنفذ ${r.port} ✓ — اضغط «طباعة فاتورة تجربة»` } : { busy: false, error: r.error });
+                setSetup(
+                  r.ok
+                    ? {
+                        busy: false,
+                        ok: `تمت الإضافة على المنفذ ${r.port} ✓ — اضغط «طباعة فاتورة تجربة»`,
+                        error:
+                          r.pluggedIn === 0
+                            ? "تنبيه: الجهاز لا يرى طابعة موصولة الآن — تأكد أن الطابعة مشغّلة وأن سلك USB (أو محوّل التابلت) موصول جيداً، ثم أعد الإعداد"
+                            : undefined,
+                      }
+                    : { busy: false, error: r.error }
+                );
                 load();
               }}
               className="btn-go px-4 py-2.5 text-sm"
@@ -241,6 +255,61 @@ function PrinterCard({ shop }: { shop: Shop }) {
             </button>
             {setup.ok && <OkNote>{setup.ok}</OkNote>}
             <ErrorNote error={setup.error ?? null} />
+
+            {/* منفذ USB | which USB port the printer is on */}
+            {usb && usb.ports.length > 0 && (
+              <div className="pt-2 space-y-1.5">
+                <span className="label block">منفذ USB لطابعة «JAC ICE Receipt»</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    className="input max-w-md"
+                    value={usb.current ?? ""}
+                    disabled={setup.busy}
+                    onChange={async (e) => {
+                      const port = e.target.value;
+                      if (!port) return;
+                      setSetup({ busy: true });
+                      const r = await window.desktop!.setupReceiptPrinter(port);
+                      setSetup(r.ok ? { busy: false, ok: `صارت الطابعة على المنفذ ${r.port} ✓ — اضغط «اختبار الاتصال»` } : { busy: false, error: r.error });
+                      load();
+                    }}
+                  >
+                    {!usb.current && <option value="">— اختر المنفذ —</option>}
+                    {usb.ports.map((p) => (
+                      <option key={p.port} value={p.port}>
+                        {p.port} — {p.desc || "جهاز USB"} {p.connected ? "· موصولة الآن ✓" : "· غير موصولة"}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={setup.busy}
+                    className="btn-soft px-4 py-2.5 text-sm"
+                    onClick={async () => {
+                      setSetup({ busy: true });
+                      const r = await window.desktop!.tryPorts();
+                      const sent = r.tried.filter((t) => t.ok).map((t) => t.port);
+                      setSetup({
+                        busy: false,
+                        ok: sent.length
+                          ? `أُرسلت ورقة تجربة إلى كل منفذ: ${sent.join("، ")} — كل ورقة مكتوب عليها رقم منفذها. اختر من القائمة المنفذ الذي خرجت منه الورقة.`
+                          : undefined,
+                        error: sent.length ? undefined : r.tried.map((t) => `${t.port}: ${t.error}`).join(" · ") || "لا توجد منافذ USB",
+                      });
+                      load();
+                    }}
+                  >
+                    {setup.busy ? "جاري…" : "جرّب كل المنافذ"}
+                  </button>
+                </div>
+                <p className="text-xs text-ink-400">
+                  ويندوز يحفظ منفذاً لكل طابعة وُصلت به من قبل. «موصولة الآن ✓» هي الطابعة الموصولة فعلاً. إذا لم يطبع شيء، اضغط «جرّب كل المنافذ».
+                </p>
+                {!usb.ports.some((p) => p.connected) && (
+                  <ErrorNote error="الجهاز لا يرى أي طابعة موصولة الآن — تأكد أن الطابعة مشغّلة وأن سلك USB (أو محوّل التابلت) موصول جيداً." />
+                )}
+              </div>
+            )}
           </div>
 
           <div className="space-y-1.5">

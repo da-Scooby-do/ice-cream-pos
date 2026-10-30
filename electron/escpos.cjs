@@ -437,41 +437,121 @@ Write-Output "OK"`,
 }
 
 /**
+ * منافذ USB للطابعات | the USB printer ports Windows knows, which device each
+ * one belongs to and whether that device is plugged in right now.
+ * (Windows keeps a port for every printer ever plugged in, so the newest port
+ * is not always the right one.)
+ */
+async function usbPorts() {
+  if (process.platform !== "win32") return [];
+  const r = await powershell(
+    `$out = @()
+$base = 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\DeviceClasses\\{28d78fad-5a12-11d1-ae5b-0000f803a8c2}'
+if (Test-Path -LiteralPath $base) {
+  foreach ($k in Get-ChildItem -LiteralPath $base -ErrorAction SilentlyContinue) {
+    $p = Get-ItemProperty -LiteralPath (Join-Path $k.PSPath '#\\Device Parameters') -ErrorAction SilentlyContinue
+    if (-not $p -or $null -eq $p.'Port Number') { continue }
+    $c = Get-ItemProperty -LiteralPath (Join-Path $k.PSPath '#\\Control') -ErrorAction SilentlyContinue
+    $vid = if ($k.PSChildName -match 'VID_([0-9A-Fa-f]{4})&PID_([0-9A-Fa-f]{4})') { "$($matches[1]):$($matches[2])" } else { '' }
+    $out += [pscustomobject]@{ port = ('{0}{1:D3}' -f $p.'Base Name', [int]$p.'Port Number'); desc = "$($p.'Port Description')"; connected = ($c.Linked -eq 1); id = $vid }
+  }
+}
+foreach ($pp in @(Get-PrinterPort -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^USB\\d+' })) {
+  if (-not ($out | Where-Object { $_.port -eq $pp.Name })) { $out += [pscustomobject]@{ port = $pp.Name; desc = "$($pp.Description)"; connected = $false; id = '' } }
+}
+ConvertTo-Json -Compress -InputObject @($out)`,
+    {},
+    30_000
+  );
+  try {
+    const list = JSON.parse(r.out || "[]");
+    const all = (Array.isArray(list) ? list : [list]).filter((p) => p && /^USB\d+$/i.test(p.port));
+    // one entry per port: a plugged-in device wins over old ones on the same port
+    const by = new Map();
+    for (const p of all) if (!by.has(p.port) || (p.connected && !by.get(p.port).connected)) by.set(p.port, p);
+    return [...by.values()].sort((a, b) => a.port.localeCompare(b.port));
+  } catch {
+    return [];
+  }
+}
+
+/** اختر منفذ طابعة الفواتير | the port the receipt printer is on, best guess first */
+function bestPort(ports, receiptPattern) {
+  const re = new RegExp(receiptPattern, "i");
+  const live = ports.filter((p) => p.connected);
+  return (live.find((p) => re.test(p.desc)) || (live.length === 1 ? live[0] : null) || live[0] || null)?.port ?? null;
+}
+
+/**
  * إعداد طابعة الفواتير بدون تعريف (ويندوز) | add a "JAC ICE Receipt" printer
  * on the receipt printer's USB port with Windows' built-in Generic / Text
- * Only driver — nothing to download.
+ * Only driver — nothing to download. port: a port chosen by hand, else the
+ * port of the plugged-in printer.
  */
-async function setupGenericPrinter(name, receiptPattern) {
+async function setupGenericPrinter(name, receiptPattern, port = null) {
   if (process.platform !== "win32") return { ok: false, error: "متاح على ويندوز فقط" };
+  const ports = await usbPorts();
+  const want = port || bestPort(ports, receiptPattern) || "";
   const r = await powershell(
     `$ErrorActionPreference = 'Stop'
 $name = $env:JAC_NAME
 $pattern = $env:JAC_PATTERN
 $usb = @(Get-PrinterPort | Where-Object { $_.Name -match '^USB\\d+' } | Sort-Object Name)
 if ($usb.Count -eq 0) { Write-Output 'NOPORT'; exit 2 }
-# prefer the USB port a receipt printer already uses, else the newest one
-$hint = Get-Printer | Where-Object { $_.PortName -match '^USB\\d+' -and $_.Name -match $pattern } | Select-Object -First 1
-$port = if ($hint) { $hint.PortName } else { $usb[-1].Name }
+$port = $env:JAC_PORT
+if (-not $port -or -not ($usb | Where-Object { $_.Name -eq $port })) {
+  # prefer the USB port a receipt printer already uses, else the newest one
+  $hint = Get-Printer | Where-Object { $_.PortName -match '^USB\\d+' -and $_.Name -match $pattern -and $_.Name -ne $name } | Select-Object -First 1
+  $port = if ($hint) { $hint.PortName } else { $usb[-1].Name }
+}
 if (-not (Get-PrinterDriver -Name 'Generic / Text Only' -ErrorAction SilentlyContinue)) { Add-PrinterDriver -Name 'Generic / Text Only' }
 if (Get-Printer -Name $name -ErrorAction SilentlyContinue) { Set-Printer -Name $name -PortName $port }
 else { Add-Printer -Name $name -DriverName 'Generic / Text Only' -PortName $port }
 Write-Output "OK $port"`,
-    { JAC_NAME: name, JAC_PATTERN: receiptPattern },
+    { JAC_NAME: name, JAC_PATTERN: receiptPattern, JAC_PORT: want },
     60_000
   );
-  if (r.ok && /OK (\S+)/.test(r.out)) return { ok: true, port: /OK (\S+)/.exec(r.out)[1] };
+  const live = ports.filter((p) => p.connected);
+  if (r.ok && /OK (\S+)/.test(r.out)) {
+    const used = /OK (\S+)/.exec(r.out)[1];
+    return { ok: true, port: used, ports, pluggedIn: live.length, sure: !!live.find((p) => p.port === used) };
+  }
   if (r.out.includes("NOPORT"))
-    return { ok: false, error: "لم يُعثر على منفذ USB لطابعة — تأكد أن الطابعة موصولة بـ USB ومشغّلة ثم أعد المحاولة" };
+    return { ok: false, ports, error: "لم يُعثر على منفذ USB لطابعة — الجهاز لا يرى الطابعة: تأكد أن الطابعة مشغّلة وأن سلك USB (أو محوّل التابلت) موصول جيداً، ثم أعد المحاولة" };
   if (/denied|0x80070005|Access/i.test(r.err))
-    return { ok: false, error: "يحتاج ويندوز صلاحية المسؤول لإضافة طابعة — أغلق البرنامج، ثم اضغط عليه بالزر الأيمن ← «تشغيل كمسؤول» وأعد المحاولة مرة واحدة" };
-  return { ok: false, error: r.err.split("\n")[0] || r.out || "تعذر إعداد الطابعة" };
+    return { ok: false, ports, error: "يحتاج ويندوز صلاحية المسؤول لإضافة طابعة — أغلق البرنامج، ثم اضغط عليه بالزر الأيمن ← «تشغيل كمسؤول» وأعد المحاولة مرة واحدة" };
+  return { ok: false, ports, error: r.err || r.out || "تعذر إعداد الطابعة" };
+}
+
+/**
+ * جرّب كل المنافذ | print a short test on every USB port in turn, each saying
+ * its own port name — the paper that comes out shows which port is right.
+ */
+async function tryPorts(name, receiptPattern, workDir) {
+  const ports = await usbPorts();
+  const tried = [];
+  for (const p of ports) {
+    const s = await setupGenericPrinter(name, receiptPattern, p.port);
+    if (!s.ok) {
+      tried.push({ port: p.port, ok: false, error: s.error });
+      continue;
+    }
+    const r = await sendRaw(name, textTest(p.port), workDir);
+    tried.push({ port: p.port, ok: r.ok, error: r.error });
+    // let the job leave the queue before the port changes under it
+    for (let i = 0; i < 8; i++) {
+      if (/jobs 0/.test((await queueState(name)).state)) break;
+      await wait(1000);
+    }
+  }
+  return { ports, tried };
 }
 
 /** اختبار نصي بسيط (بدون صور) | a plain-text test: proves the printer receives commands */
-function textTest() {
+function textTest(label = "") {
   return Buffer.concat([
     Buffer.from([0x1b, 0x40, 0x1b, 0x61, 0x01]), // reset, centre
-    Buffer.from("JAC ICE\nPRINTER TEST OK\n1234567890\n\n", "ascii"),
+    Buffer.from(`JAC ICE\nPRINTER TEST OK\n${label ? `>>> ${label} <<<\n` : ""}1234567890\n\n`, "ascii"),
     Buffer.from([0x1b, 0x64, 0x04, 0x1d, 0x56, 0x42, 0x10]), // feed, cut
   ]);
 }
@@ -481,4 +561,4 @@ function fromDataUrl(url) {
   return fromImage(nativeImage.createFromDataURL(url));
 }
 
-module.exports = { renderSlip, fromDataUrl, toEscPos, sendRaw, queueState, clearQueue, setupGenericPrinter, textTest, inkOf, DOTS };
+module.exports = { renderSlip, fromDataUrl, toEscPos, sendRaw, queueState, clearQueue, usbPorts, setupGenericPrinter, tryPorts, textTest, inkOf, DOTS };

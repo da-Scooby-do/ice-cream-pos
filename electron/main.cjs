@@ -412,10 +412,28 @@ function registerIpc() {
   );
   ipcMain.handle(
     "pos:setupReceiptPrinter",
-    guard(async () => {
-      const r = await escpos.setupGenericPrinter("JAC ICE Receipt", RECEIPT_PRINTER.source);
+    guard(async (_e, port) => {
+      const r = await escpos.setupGenericPrinter("JAC ICE Receipt", RECEIPT_PRINTER.source, typeof port === "string" ? port : null);
       if (r.ok) writeCfg({ ...readCfg(), printer: "JAC ICE Receipt", printMode: "auto" });
       log("setup receipt printer:", JSON.stringify(r));
+      return r;
+    })
+  );
+  ipcMain.handle(
+    "pos:usbPorts",
+    guard(async () => {
+      const [ports, q] = await Promise.all([escpos.usbPorts(), escpos.queueState("JAC ICE Receipt")]);
+      const current = /^\S+ (USB\d+)/.exec(q.state || "")?.[1] ?? null;
+      log("usb ports:", JSON.stringify(ports), "receipt queue:", q.state);
+      return { ports, current };
+    })
+  );
+  ipcMain.handle(
+    "pos:tryPorts",
+    guard(async () => {
+      const r = await escpos.tryPorts("JAC ICE Receipt", RECEIPT_PRINTER.source, app.getPath("userData"));
+      writeCfg({ ...readCfg(), printer: "JAC ICE Receipt", printMode: "auto" });
+      log("tried ports:", JSON.stringify(r.tried));
       return r;
     })
   );

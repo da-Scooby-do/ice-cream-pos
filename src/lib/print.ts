@@ -27,11 +27,16 @@ export type PrinterConfig = {
   raster: RasterMode;
 };
 
+/** منفذ USB لطابعة | a USB printer port: the device it belongs to, plugged in or not */
+export type UsbPort = { port: string; desc: string; connected: boolean; id: string };
+
 export type DesktopBridge = {
   isDesktop: true;
   print(opts: { heightMicrons: number; html?: string; png?: string; pngNote?: string; kick?: boolean }): Promise<{ ok: boolean; error?: string }>;
   listPrinters(): Promise<{ name: string; displayName: string; isDefault: boolean; virtual?: boolean; receipt?: boolean }[]>;
-  setupReceiptPrinter(): Promise<{ ok: boolean; port?: string; error?: string }>;
+  setupReceiptPrinter(port?: string): Promise<{ ok: boolean; port?: string; error?: string; ports?: UsbPort[]; pluggedIn?: number; sure?: boolean }>;
+  usbPorts(): Promise<{ ports: UsbPort[]; current: string | null }>;
+  tryPorts(): Promise<{ ports: UsbPort[]; tried: { port: string; ok: boolean; error?: string }[] }>;
   testPrinter(): Promise<{ ok: boolean; printer?: string; error?: string }>;
   openLastReceipt(): Promise<{ ok: boolean; error?: string }>;
   getConfig(): Promise<PrinterConfig>;

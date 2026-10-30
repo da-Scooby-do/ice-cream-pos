@@ -65,5 +65,18 @@ app.whenReady().then(async () => {
     console.log("queue after 5 s:", JSON.stringify(await esc.queueState("JAC ICE Receipt")));
   }
 
+  // which USB port is the printer on: list them, pick one by hand, try them all
+  if (process.env.QUEUE_TESTS) {
+    const u = await esc.usbPorts();
+    console.log("usb ports:", JSON.stringify(u));
+    check(u.some((p) => p.port === "USB001"), "usbPorts lists USB001");
+    const s2 = await esc.setupGenericPrinter("JAC ICE Receipt", "rongta|xprinter", "USB001");
+    console.log("setup on USB001:", JSON.stringify(s2));
+    check(s2.ok && s2.port === "USB001", "setup puts the printer on the chosen port");
+    const t = await esc.tryPorts("JAC ICE Receipt", "rongta|xprinter", work);
+    console.log("tryPorts:", JSON.stringify(t.tried));
+    check(t.tried.length >= 1 && t.tried.every((x) => x.ok), "tryPorts sent a test to every port");
+  }
+
   app.exit(failed ? 1 : 0);
 });
