@@ -400,7 +400,8 @@ try { Add-Type -Path $env:JAC_DLL } catch {
 $code = [JacRawPrint]::Send($env:JAC_PRINTER, [IO.File]::ReadAllBytes($env:JAC_FILE))
 if ($code -ne 0) { Write-Output "ERR $code"; exit 1 }
 Write-Output "OK"`,
-        { JAC_DLL: dll, JAC_PRINTER: printer, JAC_FILE: file }
+        { JAC_DLL: dll, JAC_PRINTER: printer, JAC_FILE: file },
+        45_000 // slow tablets can take a while to start PowerShell
       );
       if (r.ok && r.out.endsWith("OK")) return { ok: true };
       const code = /ERR (-?\d+)/.exec(r.out)?.[1];
