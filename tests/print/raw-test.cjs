@@ -41,5 +41,28 @@ app.whenReady().then(async () => {
   console.log("unknown printer:", JSON.stringify(bad));
   check(!bad.ok && !!bad.error, "unknown printer gives a clear error");
 
+  // a paused queue: the job waits; the queue state says so and it can be cleared
+  if (process.env.PAUSE_CMD) {
+    require("node:child_process").execSync(process.env.PAUSE_CMD, { shell: "powershell.exe", stdio: "inherit" });
+    const r3 = await esc.sendRaw("JAC ICE Receipt", payload, work);
+    console.log("send to paused queue:", JSON.stringify(r3));
+    const q = await esc.queueState("JAC ICE Receipt");
+    console.log("queue:", JSON.stringify(q));
+    check(/jobs [1-9]/.test(q.state), "queue state shows the waiting job");
+    const n = await esc.clearQueue("JAC ICE Receipt");
+    console.log("cleared:", n);
+    check(n >= 1, "clearQueue removed the waiting job");
+    check(/jobs 0/.test((await esc.queueState("JAC ICE Receipt")).state), "queue is empty after clearing");
+  }
+  // a USB port with no printer behind it (unplugged / other socket)
+  if (process.env.UNPLUGGED_PORT) {
+    require("node:child_process").execSync(`Get-CimInstance Win32_Printer -Filter \"Name='JAC ICE Receipt'\" | Invoke-CimMethod -MethodName Resume | Out-Null; Set-Printer -Name 'JAC ICE Receipt' -PortName '${process.env.UNPLUGGED_PORT}'`, { shell: "powershell.exe", stdio: "inherit" });
+    const t4 = Date.now();
+    const r4 = await esc.sendRaw("JAC ICE Receipt", payload, work);
+    console.log("send with nothing on the port:", JSON.stringify(r4), `${Date.now() - t4} ms`);
+    await new Promise((r) => setTimeout(r, 5000));
+    console.log("queue after 5 s:", JSON.stringify(await esc.queueState("JAC ICE Receipt")));
+  }
+
   app.exit(failed ? 1 : 0);
 });

@@ -45,6 +45,8 @@ jobs:
           Add-PrinterPort -Name 'C:\printout\usb.bin'
           Set-Printer -Name 'JAC ICE Receipt' -PortName 'C:\printout\usb.bin'
           $env:PORT_FILE = 'C:\printout\usb.bin'
+          $env:PAUSE_CMD = "Get-CimInstance Win32_Printer -Filter \"Name='JAC ICE Receipt'\" | Invoke-CimMethod -MethodName Pause"
+          $env:UNPLUGGED_PORT = 'USB001'
           npx electron tests/print/raw-test.cjs
       - name: Report
         run: |

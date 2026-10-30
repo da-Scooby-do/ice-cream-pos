@@ -336,9 +336,42 @@ function powershell(script, env, timeoutMs = 30_000) {
       "powershell.exe",
       ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded],
       { env: { ...process.env, ...env }, timeout: timeoutMs, windowsHide: true },
-      (err, stdout, stderr) => resolve({ ok: !err, out: String(stdout || "").trim(), err: String(stderr || err?.message || "").trim() })
+      (err, stdout, stderr) =>
+        resolve({
+          ok: !err,
+          timedOut: !!err?.killed,
+          out: String(stdout || "").trim(),
+          // the first real line of PowerShell's complaint (never the long command line)
+          err: String(stderr || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean).slice(0, 2).join(" ") || (err ? `exit ${err.code ?? "?"}` : ""),
+        })
     );
   });
+}
+
+/** حالة قائمة الطباعة في ويندوز | the Windows queue: status, port, waiting jobs */
+async function queueState(printer) {
+  const r = await powershell(
+    `$p = Get-Printer -Name $env:JAC_PRINTER -ErrorAction SilentlyContinue
+if (-not $p) { Write-Output "missing"; exit 0 }
+$jobs = @(Get-PrintJob -PrinterName $env:JAC_PRINTER -ErrorAction SilentlyContinue)
+$bad = @($jobs | Where-Object { "$($_.JobStatus)" -match 'Error|Offline|PaperOut|Blocked|Deleting' }).Count
+Write-Output ("$($p.PrinterStatus) $($p.PortName) jobs $($jobs.Count) stuck $bad")`,
+    { JAC_PRINTER: printer },
+    20_000
+  );
+  return { state: r.out || r.err };
+}
+
+/** امسح المهام العالقة | remove this app's waiting jobs from the queue; returns how many */
+async function clearQueue(printer) {
+  const r = await powershell(
+    `$jobs = @(Get-PrintJob -PrinterName $env:JAC_PRINTER -ErrorAction SilentlyContinue)
+foreach ($j in $jobs) { Remove-PrintJob -InputObject $j -ErrorAction SilentlyContinue }
+Write-Output $jobs.Count`,
+    { JAC_PRINTER: printer },
+    20_000
+  );
+  return Number(r.out) || 0;
 }
 
 /** أرسل البايتات كما هي | send bytes to the printer queue as RAW */
@@ -354,8 +387,16 @@ async function sendRaw(printer, bytes, workDir) {
 $src = @'
 ${WIN_RAW}
 '@
-if (-not (Test-Path $env:JAC_DLL)) { Add-Type -TypeDefinition $src -OutputAssembly $env:JAC_DLL -OutputType Library }
-Add-Type -Path $env:JAC_DLL
+if (-not (Test-Path $env:JAC_DLL)) {
+  $part = "$env:JAC_DLL.part.dll"
+  Add-Type -TypeDefinition $src -OutputAssembly $part -OutputType Library
+  Move-Item -Force $part $env:JAC_DLL
+}
+try { Add-Type -Path $env:JAC_DLL } catch {
+  # a damaged helper: build it in memory this time, and again on disk next time
+  Remove-Item -Force $env:JAC_DLL -ErrorAction SilentlyContinue
+  Add-Type -TypeDefinition $src
+}
 $code = [JacRawPrint]::Send($env:JAC_PRINTER, [IO.File]::ReadAllBytes($env:JAC_FILE))
 if ($code -ne 0) { Write-Output "ERR $code"; exit 1 }
 Write-Output "OK"`,
@@ -363,12 +404,24 @@ Write-Output "OK"`,
       );
       if (r.ok && r.out.endsWith("OK")) return { ok: true };
       const code = /ERR (-?\d+)/.exec(r.out)?.[1];
+      const queue = await queueState(printer);
+      if (r.timedOut || /Error|Offline|PaperOut|Paused|Blocked/i.test(queue.state)) {
+        // jobs stuck in Windows' print queue block every new one: clear them
+        const cleared = await clearQueue(printer);
+        return {
+          ok: false,
+          error:
+            `الطابعة لا تستجيب: تأكد أنها مشغّلة وفيها ورق وأن سلك USB موصول، ثم أعد المحاولة.` +
+            (cleared ? ` (تم مسح ${cleared} مهمة عالقة)` : "") +
+            ` إذا غيّرت منفذ USB اضغط «إعداد طابعة الفواتير تلقائياً». [${queue.state || "?"}${r.timedOut ? " · timeout" : ""}]`,
+        };
+      }
       const why =
         code === "1801" ? "اسم الطابعة غير صحيح" :
         code === "1804" ? "تعريف هذه الطابعة لا يقبل الطباعة المباشرة" :
         code === "5" ? "لا توجد صلاحية للطابعة" :
-        code ? `رمز الخطأ ${code}` : r.err.split("\n")[0] || "تعذر الإرسال";
-      return { ok: false, error: why };
+        code ? `رمز الخطأ ${code}` : r.err || "تعذر الإرسال";
+      return { ok: false, error: `${why} [${queue.state || "?"}]` };
     }
     // Linux / macOS: CUPS raw queue
     const r = await new Promise((resolve) =>
@@ -427,4 +480,4 @@ function fromDataUrl(url) {
   return fromImage(nativeImage.createFromDataURL(url));
 }
 
-module.exports = { renderSlip, fromDataUrl, toEscPos, sendRaw, setupGenericPrinter, textTest, inkOf, DOTS };
+module.exports = { renderSlip, fromDataUrl, toEscPos, sendRaw, queueState, clearQueue, setupGenericPrinter, textTest, inkOf, DOTS };
