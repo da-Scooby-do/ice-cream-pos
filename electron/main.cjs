@@ -17,6 +17,7 @@ const http = require("node:http");
 const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
+const escpos = require("./escpos.cjs");
 
 const SMOKE = process.argv.includes("--smoke-test");
 const PREFERRED_PORT = 47321;
@@ -35,9 +36,9 @@ if (!SMOKE && !app.requestSingleInstanceLock()) {
 const cfgFile = () => path.join(app.getPath("userData"), "desktop.json");
 function readCfg() {
   try {
-    return { printer: null, fullscreen: true, ...JSON.parse(fs.readFileSync(cfgFile(), "utf8")) };
+    return { printer: null, fullscreen: true, printMode: "auto", drawer: false, ...JSON.parse(fs.readFileSync(cfgFile(), "utf8")) };
   } catch {
-    return { printer: null, fullscreen: true };
+    return { printer: null, fullscreen: true, printMode: "auto", drawer: false };
   }
 }
 function writeCfg(c) {
@@ -225,7 +226,7 @@ function fatal(message) {
 // or send a fax: silent printing to them opens a Save dialog and gets cancelled.
 const VIRTUAL_PRINTER = /pdf|xps|onenote|fax|document writer|send to|snagit|anydesk|cutepdf/i;
 const RECEIPT_PRINTER =
-  /rongta|\brp[-\s]?\d{2,3}|ace[-\s]?v1|xprinter|xp-?\d|pos[-\s]?\d|pos58|pos80|receipt|thermal|80\s?mm|58\s?mm|epson tm|gprinter|sewoo|bixolon|star tsp/i;
+  /jac ice receipt|generic\s*\/\s*text only|rongta|\brp[-\s]?\d{2,3}|ace[-\s]?v1|xprinter|xp-?\d|pos[-\s]?\d|pos58|pos80|receipt|thermal|80\s?mm|58\s?mm|epson tm|gprinter|sewoo|bixolon|star tsp/i;
 
 /** اختر طابعة الفواتير | which printer a receipt goes to (or why none) */
 function pickPrinter(printers, chosen) {
@@ -244,14 +245,52 @@ function pickPrinter(printers, chosen) {
   };
 }
 
-async function printFrom(webContents, heightMicrons) {
+const RAW_ONLY = /jac ice receipt|generic\s*\/\s*text only/i;
+
+/** طباعة مباشرة ESC/POS أم عبر تعريف ويندوز؟ | print raw ESC/POS or through the driver? */
+function wantsRaw(cfg, name) {
+  const mode = cfg.printMode || "auto";
+  if (mode === "raw") return true;
+  if (mode === "driver") return false;
+  return RECEIPT_PRINTER.test(name);
+}
+
+async function printFrom(webContents, opts = {}) {
   const cfg = readCfg();
   const printers = await webContents.getPrintersAsync();
   if (!printers.length) return { ok: false, error: "لا توجد طابعة مثبتة على الجهاز" };
   const target = pickPrinter(printers, cfg.printer);
-  if (target.error) return { ok: false, error: target.error };
-  const height = Math.max(50_000, Math.min(Math.round(Number(heightMicrons) || 200_000), 3_000_000));
-  const base = {
+  if (target.error) {
+    log("print refused:", target.error);
+    return { ok: false, error: target.error };
+  }
+  const raw = typeof opts.html === "string" && !!opts.html && wantsRaw(cfg, target.name);
+  log(`print → «${target.name}» mode=${cfg.printMode || "auto"} ${raw ? "ESC/POS direct" : "via driver"}`);
+
+  // 1) مباشرة بلغة الطابعة (لا يحتاج تعريفاً) | straight to the printer in ESC/POS
+  if (raw) {
+    try {
+      const t0 = Date.now();
+      const bmp = await escpos.renderSlip(base(), opts.html);
+      const bytes = escpos.toEscPos(bmp, { cut: true, kick: !!opts.kick && !!cfg.drawer });
+      const r = await escpos.sendRaw(target.name, bytes, app.getPath("userData"));
+      log(`ESC/POS ${bmp.width}x${bmp.height} → ${bytes.length} bytes, ${r.ok ? "sent" : "failed"} in ${Date.now() - t0} ms`);
+      if (r.ok) return { ok: true };
+      log("raw print failed:", r.error);
+      if ((cfg.printMode || "auto") === "raw" || RAW_ONLY.test(target.name)) {
+        return { ok: false, error: `الطباعة المباشرة لم تنجح: ${r.error}` };
+      }
+    } catch (e) {
+      log("raw print error:", e?.message || e);
+      if ((cfg.printMode || "auto") === "raw" || RAW_ONLY.test(target.name)) {
+        return { ok: false, error: `الطباعة المباشرة لم تنجح: ${e?.message || e}` };
+      }
+    }
+  }
+
+  // 2) عبر تعريف ويندوز | through the Windows driver
+  const height = Math.max(50_000, Math.min(Math.round(Number(opts.heightMicrons) || 200_000), 3_000_000));
+  const options = {
     silent: true,
     printBackground: true,
     deviceName: target.name,
@@ -259,16 +298,14 @@ async function printFrom(webContents, heightMicrons) {
     scaleFactor: 100,
     copies: 1,
   };
-  const attempt = (opts) =>
-    new Promise((resolve) => webContents.print(opts, (ok, reason) => resolve({ ok, reason })));
+  const attempt = (o) => new Promise((resolve) => webContents.print(o, (ok, reason) => resolve({ ok, reason })));
 
-  // 1) ورق بطول الفاتورة بالضبط | paper exactly as long as the slip
-  const first = await attempt({ ...base, pageSize: { width: 80_000, height } });
+  // ورق بطول الفاتورة بالضبط | paper exactly as long as the slip
+  const first = await attempt({ ...options, pageSize: { width: 80_000, height } });
   if (first.ok) return { ok: true };
   log("print with slip-length paper failed:", first.reason, "— retrying with the printer's own paper");
-  // 2) بعض التعريفات ترفض المقاس المخصص: اطبع على ورق الطابعة نفسها
-  //    some drivers reject a custom size: print on the printer's own paper
-  const second = await attempt(base);
+  // بعض التعريفات ترفض المقاس المخصص | some drivers reject a custom size
+  const second = await attempt(options);
   if (second.ok) return { ok: true };
   log("print failed:", second.reason);
   return { ok: false, error: second.reason || first.reason || "تعذرت الطباعة" };
@@ -314,7 +351,16 @@ function registerIpc() {
     if (!fromUs(e)) throw new Error("forbidden");
     return fn(e, ...args);
   };
-  ipcMain.handle("pos:print", guard((e, opts) => printFrom(e.sender, opts?.heightMicrons)));
+  ipcMain.handle("pos:print", guard((e, opts) => printFrom(e.sender, opts || {})));
+  ipcMain.handle(
+    "pos:setupReceiptPrinter",
+    guard(async () => {
+      const r = await escpos.setupGenericPrinter("JAC ICE Receipt", RECEIPT_PRINTER.source);
+      if (r.ok) writeCfg({ ...readCfg(), printer: "JAC ICE Receipt", printMode: "auto" });
+      log("setup receipt printer:", JSON.stringify(r));
+      return r;
+    })
+  );
   ipcMain.handle(
     "pos:printers",
     guard(async (e) =>
@@ -334,6 +380,8 @@ function registerIpc() {
       const cur = readCfg();
       const next = { ...cur };
       if (patch && "printer" in patch) next.printer = typeof patch.printer === "string" && patch.printer ? patch.printer : null;
+      if (patch && "printMode" in patch) next.printMode = ["auto", "raw", "driver"].includes(patch.printMode) ? patch.printMode : "auto";
+      if (patch && "drawer" in patch) next.drawer = !!patch.drawer;
       if (patch && "fullscreen" in patch) {
         next.fullscreen = !!patch.fullscreen;
         win?.setFullScreen(next.fullscreen);
@@ -429,6 +477,18 @@ async function smokeTest(dataDir) {
   if (!pdf.length) throw new Error("printToPDF produced nothing");
   fs.writeFileSync(path.join(dataDir, "smoke.pdf"), pdf);
   log(`✓ print pipeline ok (${pdf.length} bytes)`);
+  // ESC/POS: draw a slip (Arabic + logo) and turn it into printer commands
+  const bmp = await escpos.renderSlip(
+    base(),
+    '<div class="slip"><img src="/brand/mono.svg" class="s-logo" alt=""><div class="s-row"><span>آيس كريم — كبير</span><span>3,500 ج.س</span></div></div>'
+  );
+  let ink = 0;
+  for (let i = 0; i < bmp.bitmap.length; i += 4) if (bmp.bitmap[i] < 128) ink++;
+  if (bmp.width < escpos.DOTS || bmp.height < 40 || ink < 500) {
+    throw new Error(`slip drawing failed (${bmp.width}x${bmp.height}, ${ink} dark pixels)`);
+  }
+  const escBytes = escpos.toEscPos(bmp, { cut: true });
+  log(`✓ ESC/POS slip ${bmp.width}x${bmp.height}, ${ink} dark pixels → ${escBytes.length} bytes`);
   console.log("SMOKE OK");
   quitting = true;
   server?.kill();

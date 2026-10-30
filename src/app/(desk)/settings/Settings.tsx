@@ -28,9 +28,9 @@ import {
 import { Card, Page, PageHeader } from "@/components/Page";
 import { PrintButton } from "@/components/PrintHost";
 import { ReceiptSlip } from "@/components/slips";
-import { ErrorNote, Field, Modal, NumInput, OkNote, Toggle, useAction } from "@/components/ui";
+import { ErrorNote, Field, Modal, NumInput, OkNote, Segmented, Toggle, useAction } from "@/components/ui";
 import { num } from "@/lib/format";
-import { useIsDesktop, type UpdateState } from "@/lib/print";
+import { useIsDesktop, type PrintMode, type UpdateState } from "@/lib/print";
 import { stamp } from "@/lib/time";
 import type { Receipt, Shop } from "@/lib/types";
 
@@ -163,25 +163,34 @@ function PrinterCard({ shop }: { shop: Shop }) {
     { name: string; displayName: string; isDefault: boolean; virtual?: boolean; receipt?: boolean }[]
   >([]);
   const [printer, setPrinter] = useState<string>("");
+  const [mode, setMode] = useState<PrintMode>("auto");
+  const [drawer, setDrawer] = useState(false);
   const [fullscreen, setFullscreen] = useState(true);
+  const [setup, setSetup] = useState<{ busy: boolean; ok?: string; error?: string }>({ busy: false });
   const desktop = useIsDesktop();
 
-  useEffect(() => {
+  const load = () => {
     if (!window.desktop) return;
     void window.desktop.listPrinters().then(setPrinters);
     void window.desktop.getConfig().then((c) => {
       setPrinter(c.printer ?? "");
+      setMode(c.printMode ?? "auto");
+      setDrawer(!!c.drawer);
       setFullscreen(c.fullscreen);
     });
-  }, []);
+  };
+  useEffect(load, []);
+
+  const chosen = printers.find((p) => p.name === printer);
+  const receipts = printers.filter((p) => p.receipt);
 
   return (
     <Card title={<span className="flex items-center gap-2"><Printer size={18} /> الطابعة والشاشة</span>}>
       {!desktop ? (
         <p className="text-sm text-ink-400">إعدادات الطابعة متاحة داخل برنامج اللابتوب.</p>
       ) : (
-        <div className="space-y-3">
-          <Field label="طابعة الفواتير" hint="اختر طابعة Rongta (مثل RP80 أو RONGTA 80mm) — الطباعة تتم مباشرة بدون نافذة">
+        <div className="space-y-4">
+          <Field label="طابعة الفواتير" hint="اختر طابعة الفواتير (عليها 🧾) — الطباعة تتم مباشرة بدون نافذة">
             <select
               className="input"
               value={printer}
@@ -201,27 +210,68 @@ function PrinterCard({ shop }: { shop: Shop }) {
               ))}
             </select>
           </Field>
-          {(() => {
-            const chosen = printers.find((p) => p.name === printer);
-            const receipts = printers.filter((p) => p.receipt);
-            if (chosen?.virtual)
-              return <ErrorNote error={`«${chosen.displayName || chosen.name}» تحفظ ملفاً ولا تطبع على الورق — اختر طابعة Rongta.`} />;
-            if (!printer && !receipts.length && printers.length > 0)
-              return (
-                <p className="text-sm font-semibold text-outflow-text bg-outflow-soft rounded-xl px-3 py-2.5">
-                  لا تظهر طابعة الفواتير (Rongta) في القائمة. تأكد أن الطابعة موصولة ومشغّلة وأن تعريفها (Driver) مثبت على ويندوز، ثم أعد فتح هذه الصفحة.
-                </p>
-              );
-            if (!printer)
-              return <p className="text-sm text-ink-500">اختر طابعة الفواتير Rongta من القائمة (عليها 🧾) — وإلا يحاول البرنامج إيجادها تلقائياً.</p>;
-            return null;
-          })()}
+          {chosen?.virtual && (
+            <ErrorNote error={`«${chosen.displayName || chosen.name}» تحفظ ملفاً ولا تطبع على الورق — اختر طابعة الفواتير.`} />
+          )}
+
+          {/* إعداد الطابعة بدون تعريف | set the printer up with no driver download */}
+          <div className="rounded-2xl ring-1 ring-sky-200 bg-sky-50 p-4 space-y-2">
+            <p className="font-semibold text-sm">
+              {receipts.length ? "طابعة الفواتير لا تطبع جيداً؟" : "لا تظهر طابعة الفواتير؟"} إعدادها بدون تعريف
+            </p>
+            <p className="text-xs text-ink-500">
+              صِل الطابعة بـ USB وشغّلها، ثم اضغط الزر. يضيف البرنامج طابعة «JAC ICE Receipt» بتعريف ويندوز المدمج
+              ويطبع عليها مباشرة بلغة الطابعة (ESC/POS) — يعمل مع Rongta و Xprinter ومعظم طابعات الفواتير 80 مم، مع القص التلقائي.
+            </p>
+            <button
+              type="button"
+              disabled={setup.busy}
+              onClick={async () => {
+                setSetup({ busy: true });
+                const r = await window.desktop!.setupReceiptPrinter();
+                setSetup(r.ok ? { busy: false, ok: `تمت الإضافة على المنفذ ${r.port} ✓ — اضغط «طباعة فاتورة تجربة»` } : { busy: false, error: r.error });
+                load();
+              }}
+              className="btn-go px-4 py-2.5 text-sm"
+            >
+              {setup.busy ? "جاري الإعداد…" : "إعداد طابعة الفواتير تلقائياً"}
+            </button>
+            {setup.ok && <OkNote>{setup.ok}</OkNote>}
+            <ErrorNote error={setup.error ?? null} />
+          </div>
+
+          <div className="space-y-1.5">
+            <span className="label block">طريقة الطباعة</span>
+            <Segmented<PrintMode>
+              value={mode}
+              onChange={async (v) => {
+                setMode(v);
+                await window.desktop?.setConfig({ printMode: v });
+              }}
+              options={[
+                { value: "auto", label: "تلقائي" },
+                { value: "raw", label: "مباشرة (ESC/POS)" },
+                { value: "driver", label: "عبر تعريف ويندوز" },
+              ]}
+            />
+            <p className="text-xs text-ink-400">
+              «تلقائي»: طابعات الفواتير تُطبع مباشرة بلغة الطابعة، وغيرها عبر تعريف ويندوز. إذا خرجت الفاتورة رموزاً غريبة جرّب الطريقة الأخرى.
+            </p>
+          </div>
+
           <div className="flex flex-wrap gap-2">
             <PrintButton slip={<ReceiptSlip r={{ ...SAMPLE, number: 0 }} shop={shop} />} label="طباعة فاتورة تجربة" />
           </div>
-          <p className="text-xs text-ink-400">
-            لفتح درج النقود تلقائياً: في خصائص طابعة Rongta داخل ويندوز فعّل فتح الدرج (Cash Drawer) بعد الطباعة.
-          </p>
+
+          <Toggle
+            checked={drawer}
+            onChange={async (v) => {
+              setDrawer(v);
+              await window.desktop?.setConfig({ drawer: v });
+            }}
+            label="فتح درج النقود مع كل بيع نقدي"
+            hint="للدرج الموصول بالطابعة — يعمل مع الطباعة المباشرة"
+          />
           <Toggle
             checked={fullscreen}
             onChange={async (v) => {

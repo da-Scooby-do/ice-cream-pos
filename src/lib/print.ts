@@ -16,12 +16,16 @@ export type UpdateState = {
   error?: string;
 };
 
+export type PrintMode = "auto" | "raw" | "driver";
+export type PrinterConfig = { printer: string | null; fullscreen: boolean; printMode: PrintMode; drawer: boolean };
+
 export type DesktopBridge = {
   isDesktop: true;
-  print(opts: { heightMicrons: number }): Promise<{ ok: boolean; error?: string }>;
-  listPrinters(): Promise<{ name: string; displayName: string; isDefault: boolean }[]>;
-  getConfig(): Promise<{ printer: string | null; fullscreen: boolean }>;
-  setConfig(c: Partial<{ printer: string | null; fullscreen: boolean }>): Promise<void>;
+  print(opts: { heightMicrons: number; html?: string; kick?: boolean }): Promise<{ ok: boolean; error?: string }>;
+  listPrinters(): Promise<{ name: string; displayName: string; isDefault: boolean; virtual?: boolean; receipt?: boolean }[]>;
+  setupReceiptPrinter(): Promise<{ ok: boolean; port?: string; error?: string }>;
+  getConfig(): Promise<PrinterConfig>;
+  setConfig(c: Partial<PrinterConfig>): Promise<void>;
   chooseFolder(): Promise<string | null>;
   chooseBackupFile(defaultDir?: string): Promise<string | null>;
   openPath(p: string): Promise<void>;
@@ -54,7 +58,8 @@ function measure(root: HTMLElement): number {
   return Math.max(Math.ceil(px * PX_TO_MICRONS) + 10_000, 50_000);
 }
 
-export async function printSlip(): Promise<{ ok: boolean; error?: string }> {
+/** kick: open the cash drawer too (cash sales, when enabled in settings) */
+export async function printSlip(opts: { kick?: boolean } = {}): Promise<{ ok: boolean; error?: string }> {
   const root = document.querySelector<HTMLElement>(".print-root");
   if (!root || !root.firstElementChild) return { ok: false, error: "لا يوجد ما يُطبع" };
 
@@ -76,7 +81,8 @@ export async function printSlip(): Promise<{ ok: boolean; error?: string }> {
       window.print();
       return { ok: true };
     }
-    return await window.desktop.print({ heightMicrons });
+    // html: the slip itself, for direct ESC/POS printing (drawn by the app)
+    return await window.desktop.print({ heightMicrons, html: root.innerHTML, kick: !!opts.kick });
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   } finally {

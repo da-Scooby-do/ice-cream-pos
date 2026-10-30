@@ -76,7 +76,7 @@ export default function PosScreen({
     if (!receipt || printedFor.current === receipt.order_id) return;
     printedFor.current = receipt.order_id;
     const t = setTimeout(async () => {
-      const r = await printSlip();
+      const r = await printSlip({ kick: receipt.payment === "cash" });
       if (!r.ok) setNotice({ ok: false, text: `لم تُطبع الفاتورة: ${r.error ?? "تحقق من الطابعة"}` });
     }, 60);
     return () => clearTimeout(t);
