@@ -526,34 +526,55 @@ Write-Output "OK $port"`,
 }
 
 /**
- * جرّب كل المنافذ | print a short test on every USB port in turn, each saying
- * its own port name — the paper that comes out shows which port is right.
+ * جرّب كل المنافذ | find the port the printer is really on. Old jobs stuck in
+ * the queue are cleared first (otherwise they all come out at once). Then a
+ * short test saying its port name goes to each port: on the right port the
+ * printer takes the job and it leaves the queue; on a port with no printer it
+ * stays stuck. The port whose job printed is kept.
  */
 async function tryPorts(name, receiptPattern, workDir) {
   const ports = await usbPorts();
   const tried = [];
+  const s0 = await setupGenericPrinter(name, receiptPattern, ports[0]?.port ?? null);
+  if (!s0.ok) return { ports, tried: [{ port: "-", ok: false, printed: false, error: s0.error }], found: null, cleared: 0 };
+  const cleared = await clearQueue(name);
   for (const p of ports) {
     const s = await setupGenericPrinter(name, receiptPattern, p.port);
     if (!s.ok) {
-      tried.push({ port: p.port, ok: false, error: s.error });
+      tried.push({ port: p.port, ok: false, printed: false, error: s.error });
       continue;
     }
     const r = await sendRaw(name, textTest(p.port), workDir);
-    tried.push({ port: p.port, ok: r.ok, error: r.error });
-    // let the job leave the queue before the port changes under it
-    for (let i = 0; i < 8; i++) {
-      if (/jobs 0/.test((await queueState(name)).state)) break;
-      await wait(1000);
+    let printed = false;
+    if (r.ok) {
+      for (let i = 0; i < 12; i++) {
+        await wait(1000);
+        if (/ jobs 0 /.test(` ${(await queueState(name)).state} `)) {
+          printed = true;
+          break;
+        }
+      }
     }
+    // a job that could not print must not follow the queue to the next port
+    if (!printed) await clearQueue(name);
+    tried.push({ port: p.port, ok: r.ok, printed, error: r.error });
   }
-  return { ports, tried };
+  const good = tried.filter((t) => t.printed).map((t) => t.port);
+  const live = ports.filter((p) => p.connected).map((p) => p.port);
+  // one port printed: that is it. Several: prefer the one Windows says is plugged in.
+  const found = good.length === 1 ? good[0] : good.find((g) => live.includes(g)) ?? null;
+  await setupGenericPrinter(name, receiptPattern, found ?? bestPort(ports, receiptPattern) ?? good[0] ?? null);
+  return { ports, tried, found, cleared };
 }
 
 /** اختبار نصي بسيط (بدون صور) | a plain-text test: proves the printer receives commands */
 function textTest(label = "") {
   return Buffer.concat([
     Buffer.from([0x1b, 0x40, 0x1b, 0x61, 0x01]), // reset, centre
-    Buffer.from(`JAC ICE\nPRINTER TEST OK\n${label ? `>>> ${label} <<<\n` : ""}1234567890\n\n`, "ascii"),
+    Buffer.from("JAC ICE\nPRINTER TEST OK\n", "ascii"),
+    // the port name big and bold, so it is easy to read off the paper
+    label ? Buffer.concat([Buffer.from([0x1b, 0x21, 0x38]), Buffer.from(`${label}\n`, "ascii"), Buffer.from([0x1b, 0x21, 0x00])]) : Buffer.alloc(0),
+    Buffer.from("1234567890\n\n", "ascii"),
     Buffer.from([0x1b, 0x64, 0x04, 0x1d, 0x56, 0x42, 0x10]), // feed, cut
   ]);
 }

@@ -74,7 +74,8 @@ app.whenReady().then(async () => {
     console.log("setup on USB001:", JSON.stringify(s2));
     check(s2.ok && s2.port === "USB001", "setup puts the printer on the chosen port");
     const t = await esc.tryPorts("JAC ICE Receipt", "rongta|xprinter", work);
-    console.log("tryPorts:", JSON.stringify(t.tried));
+    console.log("tryPorts:", JSON.stringify(t.tried), "found:", t.found, "cleared:", t.cleared);
+    check(t.tried.some((x) => x.printed), "tryPorts saw a job leave the queue (printed)");
     check(t.tried.length >= 1 && t.tried.every((x) => x.ok), "tryPorts sent a test to every port");
   }
 

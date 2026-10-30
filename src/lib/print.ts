@@ -36,7 +36,12 @@ export type DesktopBridge = {
   listPrinters(): Promise<{ name: string; displayName: string; isDefault: boolean; virtual?: boolean; receipt?: boolean }[]>;
   setupReceiptPrinter(port?: string): Promise<{ ok: boolean; port?: string; error?: string; ports?: UsbPort[]; pluggedIn?: number; sure?: boolean }>;
   usbPorts(): Promise<{ ports: UsbPort[]; current: string | null }>;
-  tryPorts(): Promise<{ ports: UsbPort[]; tried: { port: string; ok: boolean; error?: string }[] }>;
+  tryPorts(): Promise<{
+    ports: UsbPort[];
+    tried: { port: string; ok: boolean; printed: boolean; error?: string }[];
+    found: string | null;
+    cleared: number;
+  }>;
   testPrinter(): Promise<{ ok: boolean; printer?: string; error?: string }>;
   openLastReceipt(): Promise<{ ok: boolean; error?: string }>;
   getConfig(): Promise<PrinterConfig>;

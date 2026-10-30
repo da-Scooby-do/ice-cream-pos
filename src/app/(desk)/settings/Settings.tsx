@@ -288,22 +288,28 @@ function PrinterCard({ shop }: { shop: Shop }) {
                     onClick={async () => {
                       setSetup({ busy: true });
                       const r = await window.desktop!.tryPorts();
-                      const sent = r.tried.filter((t) => t.ok).map((t) => t.port);
-                      setSetup({
-                        busy: false,
-                        ok: sent.length
-                          ? `أُرسلت ورقة تجربة إلى كل منفذ: ${sent.join("، ")} — كل ورقة مكتوب عليها رقم منفذها. اختر من القائمة المنفذ الذي خرجت منه الورقة.`
-                          : undefined,
-                        error: sent.length ? undefined : r.tried.map((t) => `${t.port}: ${t.error}`).join(" · ") || "لا توجد منافذ USB",
-                      });
+                      const printed = r.tried.filter((t) => t.printed).map((t) => t.port);
+                      const old = r.cleared ? ` (مُسحت ${r.cleared} ورقة قديمة كانت عالقة)` : "";
+                      setSetup(
+                        r.found
+                          ? { busy: false, ok: `وُجدت الطابعة على المنفذ ${r.found} ✓ وتم اختياره${old} — اضغط «طباعة فاتورة تجربة»` }
+                          : printed.length
+                            ? { busy: false, ok: `خرجت ورقة من أكثر من منفذ (${printed.join("، ")})${old} — اختر من القائمة الرقم المكتوب بالخط الكبير على الورقة.` }
+                            : {
+                                busy: false,
+                                error:
+                                  `لم تطبع الطابعة على أي منفذ${old}. تأكد أن الطابعة مشغّلة وفيها ورق والسلك موصول، ثم أعد المحاولة. ` +
+                                  r.tried.map((t) => `${t.port}: ${t.printed ? "طبع" : t.error || "لم يطبع"}`).join(" · "),
+                              }
+                      );
                       load();
                     }}
                   >
-                    {setup.busy ? "جاري…" : "جرّب كل المنافذ"}
+                    {setup.busy ? "جاري البحث عن الطابعة… (حتى دقيقة)" : "ابحث عن منفذ الطابعة"}
                   </button>
                 </div>
                 <p className="text-xs text-ink-400">
-                  ويندوز يحفظ منفذاً لكل طابعة وُصلت به من قبل. «موصولة الآن ✓» هي الطابعة الموصولة فعلاً. إذا لم يطبع شيء، اضغط «جرّب كل المنافذ».
+                  هذه أرقام يعطيها ويندوز للطابعة (ليست فتحات التابلت) — لا تنقل السلك بين الفتحات. إذا لم يطبع شيء اضغط «ابحث عن منفذ الطابعة»: يمسح الأوراق العالقة ويجرّب كل رقم ويختار الذي طبع.
                 </p>
                 {!usb.ports.some((p) => p.connected) && (
                   <ErrorNote error="الجهاز لا يرى أي طابعة موصولة الآن — تأكد أن الطابعة مشغّلة وأن سلك USB (أو محوّل التابلت) موصول جيداً." />

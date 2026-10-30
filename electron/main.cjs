@@ -433,7 +433,7 @@ function registerIpc() {
     guard(async () => {
       const r = await escpos.tryPorts("JAC ICE Receipt", RECEIPT_PRINTER.source, app.getPath("userData"));
       writeCfg({ ...readCfg(), printer: "JAC ICE Receipt", printMode: "auto" });
-      log("tried ports:", JSON.stringify(r.tried));
+      log("tried ports:", JSON.stringify(r.tried), "found:", r.found, "cleared:", r.cleared);
       return r;
     })
   );
