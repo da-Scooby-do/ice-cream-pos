@@ -34,6 +34,18 @@ jobs:
           TEST_FILE: C:\printout\job.out
           TEST_OUT: C:\printout\results
         run: npx electron tests/print/print-test.cjs
+      - name: Direct ESC/POS printing through the Windows spooler
+        shell: pwsh
+        run: |
+          # 1) the app's "set up the receipt printer" button, on a USB-named port
+          Add-PrinterPort -Name 'USB001'
+          npx electron tests/print/raw-test.cjs --setup
+          Get-Printer | Format-Table Name, DriverName, PortName
+          # 2) point it at a file instead of a real USB printer, then print RAW
+          Add-PrinterPort -Name 'C:\printout\usb.bin'
+          Set-Printer -Name 'JAC ICE Receipt' -PortName 'C:\printout\usb.bin'
+          $env:PORT_FILE = 'C:\printout\usb.bin'
+          npx electron tests/print/raw-test.cjs
       - name: Report
         run: |
           pip install pymupdf --quiet
