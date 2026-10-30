@@ -32,22 +32,25 @@ async function renderSlip(baseUrl, html, { prefer, only, log } = {}) {
   const first = prefer && order.includes(prefer) ? prefer : preferred;
   if (first) order.sort((a, b) => (b === first) - (a === first));
   let best = null;
+  const tries = [`html ${html.length}`]; // what each method gave — shown to the user when all fail
   for (const method of order) {
     const t0 = Date.now();
     try {
       const r = await METHODS[method](baseUrl, html);
       r.method = method;
+      tries.push(`${method} ${r.width}x${r.height} ink ${r.ink}`);
       log?.(`slip drawn by ${method}: ${r.width}x${r.height}, ink ${r.ink}, ${Date.now() - t0} ms`);
       if (r.ink >= MIN_INK) {
         preferred = method;
-        return r;
+        return Object.assign(r, { tries });
       }
       if (!best || r.ink > best.ink) best = r;
     } catch (e) {
+      tries.push(`${method}: ${String(e?.message || e).slice(0, 80)}`);
       log?.(`slip drawing by ${method} failed: ${e?.message || e}`);
     }
   }
-  return best ?? { bitmap: Buffer.alloc(0), width: 0, height: 0, png: Buffer.alloc(0), ink: 0, method: "none" };
+  return Object.assign(best ?? { bitmap: Buffer.alloc(0), width: 0, height: 0, png: Buffer.alloc(0), ink: 0, method: "none" }, { tries });
 }
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));

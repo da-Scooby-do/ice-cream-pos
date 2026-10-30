@@ -26,6 +26,13 @@ app.setAppUserModelId("com.jacice.pos");
 // for automated tests only: keep test data away from the real profile
 if (process.env.JAC_USER_DATA) app.setPath("userData", process.env.JAC_USER_DATA);
 if (process.env.JAC_DOCUMENTS) app.setPath("documents", process.env.JAC_DOCUMENTS);
+// بعض كروت الشاشة ترجع صورة فارغة للفاتورة | some graphics drivers hand back
+// empty pictures; after that happens the app starts with software drawing
+try {
+  if (JSON.parse(fs.readFileSync(path.join(app.getPath("userData"), "desktop.json"), "utf8")).gpu === false) app.disableHardwareAcceleration();
+} catch {
+  /* no config yet */
+}
 if (!SMOKE && !app.requestSingleInstanceLock()) {
   app.quit();
   process.exit(0);
@@ -284,8 +291,13 @@ async function printFrom(webContents, opts = {}) {
         /* diagnostics only */
       }
       if (bmp.ink < 300) {
-        log(`ESC/POS slip came out empty by every method (best ${bmp.method} ${bmp.width}x${bmp.height}, ink ${bmp.ink}) — not sent`);
-        throw new Error("صورة الفاتورة خرجت فارغة — أعد المحاولة");
+        log(`ESC/POS slip came out empty by every method (${bmp.tries.join(" · ")}) — not sent`);
+        if (app.isHardwareAccelerationEnabled()) {
+          // next start: draw without the graphics card
+          writeCfg({ ...readCfg(), gpu: false });
+          throw new Error(`صورة الفاتورة خرجت فارغة. أغلق البرنامج وافتحه من جديد ثم جرّب مرة أخرى [${bmp.tries.join(" · ")}]`);
+        }
+        throw new Error(`صورة الفاتورة خرجت فارغة [${bmp.tries.join(" · ")} · gpu off]`);
       }
       const bytes = escpos.toEscPos(bmp, { cut: true, kick: !!opts.kick && !!cfg.drawer, raster: cfg.raster || "gsv0" });
       const r = await escpos.sendRaw(target.name, bytes, app.getPath("userData"));
@@ -481,7 +493,7 @@ async function boot() {
   const backupDir = SMOKE ? path.join(dataDir, "backups") : path.join(app.getPath("documents"), "JAC ICE Backups");
   fs.mkdirSync(path.join(userData, "logs"), { recursive: true });
   logPath = path.join(userData, "logs", SMOKE ? "smoke.log" : "app.log");
-  log(`JAC ICE POS ${app.getVersion()} — electron ${process.versions.electron}, node ${process.versions.node}`);
+  log(`JAC ICE POS ${app.getVersion()} — electron ${process.versions.electron}, node ${process.versions.node}, ${os.release()} ${process.arch}, gpu ${app.isHardwareAccelerationEnabled() ? "on" : "off"}`);
 
   registerIpc();
   createWindow();
