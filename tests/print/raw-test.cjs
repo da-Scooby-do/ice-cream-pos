@@ -8,6 +8,7 @@ const esc = require("../../electron/escpos.cjs");
 
 const PORT_FILE = process.env.PORT_FILE; // where the fake USB port writes
 let failed = false;
+const ps = (cmd) => require("node:child_process").execFileSync("powershell.exe", ["-NoProfile", "-Command", cmd], { stdio: "inherit" });
 const check = (ok, msg) => { console.log(`${ok ? "PASS" : "FAIL"} ${msg}`); if (!ok) failed = true; };
 
 app.whenReady().then(async () => {
@@ -42,8 +43,8 @@ app.whenReady().then(async () => {
   check(!bad.ok && !!bad.error, "unknown printer gives a clear error");
 
   // a paused queue: the job waits; the queue state says so and it can be cleared
-  if (process.env.PAUSE_CMD) {
-    require("node:child_process").execSync(process.env.PAUSE_CMD, { shell: "powershell.exe", stdio: "inherit" });
+  if (process.env.QUEUE_TESTS) {
+    ps("Get-CimInstance Win32_Printer -Filter \"Name='JAC ICE Receipt'\" | Invoke-CimMethod -MethodName Pause | Out-Null");
     const r3 = await esc.sendRaw("JAC ICE Receipt", payload, work);
     console.log("send to paused queue:", JSON.stringify(r3));
     const q = await esc.queueState("JAC ICE Receipt");
@@ -56,7 +57,7 @@ app.whenReady().then(async () => {
   }
   // a USB port with no printer behind it (unplugged / other socket)
   if (process.env.UNPLUGGED_PORT) {
-    require("node:child_process").execSync(`Get-CimInstance Win32_Printer -Filter \"Name='JAC ICE Receipt'\" | Invoke-CimMethod -MethodName Resume | Out-Null; Set-Printer -Name 'JAC ICE Receipt' -PortName '${process.env.UNPLUGGED_PORT}'`, { shell: "powershell.exe", stdio: "inherit" });
+    ps(`Get-CimInstance Win32_Printer -Filter "Name='JAC ICE Receipt'" | Invoke-CimMethod -MethodName Resume | Out-Null; Set-Printer -Name 'JAC ICE Receipt' -PortName '${process.env.UNPLUGGED_PORT}'`);
     const t4 = Date.now();
     const r4 = await esc.sendRaw("JAC ICE Receipt", payload, work);
     console.log("send with nothing on the port:", JSON.stringify(r4), `${Date.now() - t4} ms`);
