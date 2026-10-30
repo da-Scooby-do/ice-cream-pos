@@ -7,7 +7,7 @@
 // cut at the end, and sent to the printer untouched ("RAW"). On Windows this
 // works with the built-in "Generic / Text Only" driver; Arabic text and the
 // logo print fine because the printer only ever receives a picture.
-const { BrowserWindow } = require("electron");
+const { BrowserWindow, nativeImage } = require("electron");
 const { execFile } = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -17,11 +17,74 @@ const DOTS = 576; // printable width of an 80 mm printer at 203 dpi
 const CSS_PX_72MM = (72 / 25.4) * 96; // the slip is 72 mm wide in CSS
 const ZOOM = DOTS / CSS_PX_72MM;
 
+const MIN_INK = 300; // fewer dark pixels than this = the picture came out empty
+let preferred = null; // the drawing method that last worked on this computer
+
 /**
  * ارسم القسيمة صورةً | draw the slip as a bitmap, DOTS wide.
  * Uses our own /print-frame page so the app's fonts and styles apply.
+ * Some computers (graphics drivers, tablets) hand back an empty picture from
+ * one method, so there are three, tried in turn; the one that works is
+ * remembered (opts.prefer / result.method) and tried first next time.
  */
-async function renderSlip(baseUrl, html) {
+async function renderSlip(baseUrl, html, { prefer, only, log } = {}) {
+  const order = only ? [only] : ["offscreen", "hidden", "canvas"];
+  const first = prefer && order.includes(prefer) ? prefer : preferred;
+  if (first) order.sort((a, b) => (b === first) - (a === first));
+  let best = null;
+  for (const method of order) {
+    const t0 = Date.now();
+    try {
+      const r = await METHODS[method](baseUrl, html);
+      r.method = method;
+      log?.(`slip drawn by ${method}: ${r.width}x${r.height}, ink ${r.ink}, ${Date.now() - t0} ms`);
+      if (r.ink >= MIN_INK) {
+        preferred = method;
+        return r;
+      }
+      if (!best || r.ink > best.ink) best = r;
+    } catch (e) {
+      log?.(`slip drawing by ${method} failed: ${e?.message || e}`);
+    }
+  }
+  return best ?? { bitmap: Buffer.alloc(0), width: 0, height: 0, png: Buffer.alloc(0), ink: 0, method: "none" };
+}
+
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// put the slip in the page and wait for fonts and the logo; returns its CSS height
+async function fill(wc, html) {
+  return wc.executeJavaScript(`(async () => {
+    const f = document.getElementById("frame");
+    f.innerHTML = ${JSON.stringify(html)};
+    await document.fonts.ready;
+    await Promise.all([...f.querySelectorAll("img")].map((i) => i.complete ? null : new Promise((r) => { i.onload = r; i.onerror = r; })));
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    return Math.ceil(f.getBoundingClientRect().height);
+  })()`);
+}
+
+// take pictures until one has ink (a frame of the full size has been painted)
+async function capture(w, height, opts) {
+  let img = null;
+  for (let i = 0; i < 16; i++) {
+    if (w.webContents.isOffscreen()) w.webContents.invalidate();
+    img = await w.webContents.capturePage({ x: 0, y: 0, width: DOTS, height }, opts);
+    const s = img.getSize();
+    if (s.width > 0 && s.height > 0 && inkOf(fixAlpha(img.toBitmap())) > 0) break;
+    await wait(i < 4 ? 150 : 300);
+  }
+  return fromImage(img);
+}
+
+function fromImage(img) {
+  const size = img.getSize();
+  const bitmap = fixAlpha(img.toBitmap());
+  return { bitmap, width: size.width, height: size.height, png: img.toPNG(), ink: inkOf(bitmap) };
+}
+
+// 1) نافذة خارج الشاشة | offscreen rendering
+async function drawOffscreen(baseUrl, html) {
   const w = new BrowserWindow({
     show: false,
     width: DOTS,
@@ -34,38 +97,124 @@ async function renderSlip(baseUrl, html) {
   try {
     await w.loadURL(`${baseUrl}/print-frame`);
     w.webContents.setZoomFactor(ZOOM);
-    const cssHeight = await w.webContents.executeJavaScript(`(async () => {
-      const f = document.getElementById("frame");
-      f.innerHTML = ${JSON.stringify(html)};
-      await document.fonts.ready;
-      await Promise.all([...f.querySelectorAll("img")].map((i) => i.complete ? null : new Promise((r) => { i.onload = r; i.onerror = r; })));
-      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-      return Math.ceil(f.getBoundingClientRect().height);
-    })()`);
-    const height = Math.max(40, Math.ceil(cssHeight * ZOOM));
+    const height = Math.max(40, Math.ceil((await fill(w.webContents, html)) * ZOOM));
     w.setContentSize(DOTS, height);
-    await new Promise((r) => setTimeout(r, 250));
-    // wait until a frame of the full size has really been painted
-    let img = null;
-    for (let i = 0; i < 10; i++) {
-      img = await w.webContents.capturePage({ x: 0, y: 0, width: DOTS, height });
-      const s = img.getSize();
-      if (s.width > 0 && s.height > 0 && inkOf(img.toBitmap()) > 0) break;
-      await new Promise((r) => setTimeout(r, 150));
-    }
-    const size = img.getSize();
-    const bitmap = img.toBitmap();
-    return { bitmap, width: size.width, height: size.height, png: img.toPNG(), ink: inkOf(bitmap) };
+    await wait(250);
+    return await capture(w, height);
   } finally {
     w.destroy();
   }
 }
+
+// 2) نافذة عادية مخفية | a normal hidden window, kept painting while hidden
+async function drawHidden(baseUrl, html) {
+  const w = new BrowserWindow({
+    show: false,
+    width: DOTS,
+    height: 800,
+    useContentSize: true,
+    frame: false,
+    skipTaskbar: true,
+    focusable: false,
+    paintWhenInitiallyHidden: true,
+    webPreferences: { zoomFactor: ZOOM, backgroundThrottling: false, partition: "jac-print-render" },
+  });
+  try {
+    await w.loadURL(`${baseUrl}/print-frame`);
+    w.webContents.setZoomFactor(ZOOM);
+    const height = Math.max(40, Math.ceil((await fill(w.webContents, html)) * ZOOM));
+    w.setContentSize(DOTS, height);
+    await wait(300);
+    // stayHidden: Chromium draws the page for the picture without showing it
+    return await capture(w, height, { stayHidden: true });
+  } finally {
+    w.destroy();
+  }
+}
+
+// 3) رسم داخل الصفحة | the page draws itself onto a canvas (no screen capture
+// at all: the slip, its styles, fonts and logo go into an SVG picture)
+async function drawCanvas(baseUrl, html) {
+  const w = new BrowserWindow({
+    show: false,
+    width: 400,
+    height: 800,
+    webPreferences: { backgroundThrottling: false, partition: "jac-print-render" },
+  });
+  try {
+    await w.loadURL(`${baseUrl}/print-frame`);
+    w.webContents.setZoomFactor(1);
+    await fill(w.webContents, html);
+    const url = await w.webContents.executeJavaScript(`(async (DOTS) => {
+      const asData = async (u) => {
+        const b = await (await fetch(u)).blob();
+        return await new Promise((r, j) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.onerror = j; fr.readAsDataURL(b); });
+      };
+      let css = "";
+      for (const sh of document.styleSheets) {
+        try { for (const r of sh.cssRules) css += r.cssText + "\\n"; } catch {}
+      }
+      for (const m of new Set([...css.matchAll(/url\\(\\s*["']?([^"')]+)["']?\\s*\\)/g)].map((m) => m[1]))) {
+        if (m.startsWith("data:")) continue;
+        try { css = css.split(m).join(await asData(new URL(m, location.href).href)); } catch {}
+      }
+      const f = document.getElementById("frame");
+      const box = f.getBoundingClientRect();
+      const cw = Math.ceil(box.width), ch = Math.ceil(box.height);
+      const clone = f.cloneNode(true);
+      for (const img of clone.querySelectorAll("img")) { try { img.setAttribute("src", await asData(img.src)); } catch {} }
+      const XH = "http://www.w3.org/1999/xhtml";
+      const root = document.createElementNS(XH, "div");
+      root.setAttribute("dir", document.documentElement.dir || "rtl");
+      root.setAttribute("lang", document.documentElement.lang || "ar");
+      root.setAttribute("class", document.documentElement.className + " " + document.body.className);
+      root.setAttribute("style", "background:#fff;width:" + cw + "px");
+      const st = document.createElementNS(XH, "style");
+      st.textContent = css;
+      root.append(st, clone);
+      const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + cw + '" height="' + ch + '"><foreignObject x="0" y="0" width="100%" height="100%">' + new XMLSerializer().serializeToString(root) + "</foreignObject></svg>";
+      const img = new Image();
+      img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+      await img.decode();
+      await new Promise((r) => setTimeout(r, 150)); // embedded fonts
+      const scale = DOTS / cw;
+      const c = document.createElement("canvas");
+      c.width = DOTS;
+      c.height = Math.max(40, Math.ceil(ch * scale));
+      const g = c.getContext("2d", { willReadFrequently: true });
+      g.fillStyle = "#fff";
+      g.fillRect(0, 0, c.width, c.height);
+      g.drawImage(img, 0, 0, c.width, c.height);
+      return c.toDataURL("image/png");
+    })(${DOTS})`);
+    return fromImage(nativeImage.createFromDataURL(url));
+  } finally {
+    w.destroy();
+  }
+}
+
+const METHODS = { offscreen: drawOffscreen, hidden: drawHidden, canvas: drawCanvas };
 
 /** عدد النقاط الداكنة | how many dark pixels (an empty picture has none) */
 function inkOf(bitmap) {
   let n = 0;
   for (let i = 0; i < bitmap.length; i += 4) if (bitmap[i + 3] > 0 && bitmap[i] + bitmap[i + 1] + bitmap[i + 2] < 384) n++;
   return n;
+}
+
+// some graphics drivers return the picture with every pixel marked fully
+// transparent although the colors are there; the page is white, so if no pixel
+// is opaque but the white background is visible, treat the picture as opaque
+function fixAlpha(bitmap) {
+  let white = 0;
+  for (let i = 0; i < bitmap.length; i += 4) {
+    if (bitmap[i + 3] > 0) return bitmap;
+    if (bitmap[i] > 200 && bitmap[i + 1] > 200 && bitmap[i + 2] > 200) white++;
+  }
+  if (white * 4 < bitmap.length / 4) return bitmap; // nothing painted at all
+  const out = Buffer.from(bitmap);
+  for (let i = 3; i < out.length; i += 4) out[i] = 255;
+  return out;
 }
 
 /**

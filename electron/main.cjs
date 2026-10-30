@@ -275,7 +275,8 @@ async function printFrom(webContents, opts = {}) {
   if (raw) {
     try {
       const t0 = Date.now();
-      const bmp = await escpos.renderSlip(base(), opts.html);
+      const bmp = await escpos.renderSlip(base(), opts.html, { prefer: cfg.render, log });
+      if (bmp.ink >= 300 && bmp.method !== cfg.render) writeCfg({ ...readCfg(), render: bmp.method });
       // keep the last receipt picture: «فتح صورة آخر فاتورة» shows exactly what was sent
       try {
         fs.writeFileSync(lastReceiptPng(), bmp.png);
@@ -283,12 +284,12 @@ async function printFrom(webContents, opts = {}) {
         /* diagnostics only */
       }
       if (bmp.ink < 300) {
-        log(`ESC/POS slip came out empty (${bmp.width}x${bmp.height}, ink ${bmp.ink}) — not sent`);
+        log(`ESC/POS slip came out empty by every method (best ${bmp.method} ${bmp.width}x${bmp.height}, ink ${bmp.ink}) — not sent`);
         throw new Error("صورة الفاتورة خرجت فارغة — أعد المحاولة");
       }
       const bytes = escpos.toEscPos(bmp, { cut: true, kick: !!opts.kick && !!cfg.drawer, raster: cfg.raster || "gsv0" });
       const r = await escpos.sendRaw(target.name, bytes, app.getPath("userData"));
-      log(`ESC/POS ${bmp.width}x${bmp.height} ink ${bmp.ink} (${cfg.raster || "gsv0"}) → ${bytes.length} bytes, ${r.ok ? "sent" : "failed"} in ${Date.now() - t0} ms`);
+      log(`ESC/POS ${bmp.width}x${bmp.height} ink ${bmp.ink} (${bmp.method}, ${cfg.raster || "gsv0"}) → ${bytes.length} bytes, ${r.ok ? "sent" : "failed"} in ${Date.now() - t0} ms`);
       if (r.ok) return { ok: true };
       log("raw print failed:", r.error);
       if ((cfg.printMode || "auto") === "raw" || RAW_ONLY.test(target.name)) {
@@ -511,18 +512,18 @@ async function smokeTest(dataDir) {
   if (!pdf.length) throw new Error("printToPDF produced nothing");
   fs.writeFileSync(path.join(dataDir, "smoke.pdf"), pdf);
   log(`✓ print pipeline ok (${pdf.length} bytes)`);
-  // ESC/POS: draw a slip (Arabic + logo) and turn it into printer commands
-  const bmp = await escpos.renderSlip(
-    base(),
-    '<div class="slip"><img src="/brand/mono.svg" class="s-logo" alt=""><div class="s-row"><span>آيس كريم — كبير</span><span>3,500 ج.س</span></div></div>'
-  );
-  let ink = 0;
-  for (let i = 0; i < bmp.bitmap.length; i += 4) if (bmp.bitmap[i] < 128) ink++;
-  if (bmp.width < escpos.DOTS || bmp.height < 40 || ink < 500) {
-    throw new Error(`slip drawing failed (${bmp.width}x${bmp.height}, ${ink} dark pixels)`);
+  // ESC/POS: draw a slip (Arabic + logo) by each method and turn it into printer commands
+  const slip =
+    '<div class="slip"><img src="/brand/mono.svg" class="s-logo" alt=""><div class="s-row"><span>آيس كريم — كبير</span><span>3,500 ج.س</span></div></div>';
+  for (const only of ["offscreen", "hidden", "canvas"]) {
+    const bmp = await escpos.renderSlip(base(), slip, { only });
+    if (bmp.width < escpos.DOTS || bmp.height < 40 || bmp.ink < 500) {
+      fs.writeFileSync(path.join(dataDir, `slip-${only}.png`), bmp.png);
+      throw new Error(`slip drawing by ${only} failed (${bmp.width}x${bmp.height}, ${bmp.ink} dark pixels)`);
+    }
+    const escBytes = escpos.toEscPos(bmp, { cut: true });
+    log(`✓ ESC/POS slip by ${only} ${bmp.width}x${bmp.height}, ${bmp.ink} dark pixels → ${escBytes.length} bytes`);
   }
-  const escBytes = escpos.toEscPos(bmp, { cut: true });
-  log(`✓ ESC/POS slip ${bmp.width}x${bmp.height}, ${ink} dark pixels → ${escBytes.length} bytes`);
   console.log("SMOKE OK");
   quitting = true;
   server?.kill();
