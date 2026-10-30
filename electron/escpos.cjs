@@ -38,8 +38,8 @@ async function renderSlip(baseUrl, html, { prefer, only, log } = {}) {
     try {
       const r = await METHODS[method](baseUrl, html);
       r.method = method;
-      tries.push(`${method} ${r.width}x${r.height} ink ${r.ink}`);
-      log?.(`slip drawn by ${method}: ${r.width}x${r.height}, ink ${r.ink}, ${Date.now() - t0} ms`);
+      tries.push(`${method} ${r.width}x${r.height} ink ${r.ink} (${r.page})`);
+      log?.(`slip drawn by ${method}: ${r.width}x${r.height}, ink ${r.ink}, page ${r.page}, ${Date.now() - t0} ms`);
       if (r.ink >= MIN_INK) {
         preferred = method;
         return Object.assign(r, { tries });
@@ -55,15 +55,35 @@ async function renderSlip(baseUrl, html, { prefer, only, log } = {}) {
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// put the slip in the page and wait for fonts and the logo; returns its CSS height
+// put the slip in the page and wait for fonts and the logo; returns its CSS
+// height and a short note on the page's state (shown when a picture is empty).
+// The height is checked until it holds steady: on a slow computer the page may
+// still be starting up, and if the slip went missing it is put back.
 async function fill(wc, html) {
   return wc.executeJavaScript(`(async () => {
-    const f = document.getElementById("frame");
-    f.innerHTML = ${JSON.stringify(html)};
-    await document.fonts.ready;
-    await Promise.all([...f.querySelectorAll("img")].map((i) => i.complete ? null : new Promise((r) => { i.onload = r; i.onerror = r; })));
-    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-    return Math.ceil(f.getBoundingClientRect().height);
+    const html = ${JSON.stringify(html)};
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const frame = () => document.getElementById("frame");
+    const put = () => { if (frame() && !frame().childElementCount) frame().innerHTML = html; };
+    put();
+    await Promise.race([document.fonts.ready, sleep(3000)]);
+    let last = -1, same = 0;
+    for (let i = 0; i < 40 && same < 2; i++) {
+      put();
+      const f = frame();
+      await Promise.all([...(f ? f.querySelectorAll("img") : [])].map((i) => i.complete ? null : Promise.race([new Promise((r) => { i.onload = r; i.onerror = r; }), sleep(3000)])));
+      await Promise.race([new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))), sleep(300)]);
+      const h = f ? Math.ceil(f.getBoundingClientRect().height) : 0;
+      same = h > 20 && h === last ? same + 1 : 0;
+      last = h;
+      if (same < 2) await sleep(150);
+    }
+    const f = frame();
+    return {
+      h: Math.max(0, last),
+      page: (f ? "n" + f.childElementCount + " w" + Math.round(f.getBoundingClientRect().width) : "noframe") +
+        " " + innerWidth + "x" + innerHeight + " " + document.visibilityState + " " + document.readyState,
+    };
   })()`);
 }
 
@@ -100,10 +120,11 @@ async function drawOffscreen(baseUrl, html) {
   try {
     await w.loadURL(`${baseUrl}/print-frame`);
     w.webContents.setZoomFactor(ZOOM);
-    const height = Math.max(40, Math.ceil((await fill(w.webContents, html)) * ZOOM));
+    const { h, page } = await fill(w.webContents, html);
+    const height = Math.max(40, Math.ceil(h * ZOOM));
     w.setContentSize(DOTS, height);
     await wait(250);
-    return await capture(w, height);
+    return Object.assign(await capture(w, height), { page });
   } finally {
     w.destroy();
   }
@@ -125,11 +146,12 @@ async function drawHidden(baseUrl, html) {
   try {
     await w.loadURL(`${baseUrl}/print-frame`);
     w.webContents.setZoomFactor(ZOOM);
-    const height = Math.max(40, Math.ceil((await fill(w.webContents, html)) * ZOOM));
+    const { h, page } = await fill(w.webContents, html);
+    const height = Math.max(40, Math.ceil(h * ZOOM));
     w.setContentSize(DOTS, height);
     await wait(300);
     // stayHidden: Chromium draws the page for the picture without showing it
-    return await capture(w, height, { stayHidden: true });
+    return Object.assign(await capture(w, height, { stayHidden: true }), { page });
   } finally {
     w.destroy();
   }
@@ -147,7 +169,7 @@ async function drawCanvas(baseUrl, html) {
   try {
     await w.loadURL(`${baseUrl}/print-frame`);
     w.webContents.setZoomFactor(1);
-    await fill(w.webContents, html);
+    const { page } = await fill(w.webContents, html);
     const url = await w.webContents.executeJavaScript(`(async (DOTS) => {
       const asData = async (u) => {
         const b = await (await fetch(u)).blob();
@@ -190,7 +212,7 @@ async function drawCanvas(baseUrl, html) {
       g.drawImage(img, 0, 0, c.width, c.height);
       return c.toDataURL("image/png");
     })(${DOTS})`);
-    return fromImage(nativeImage.createFromDataURL(url));
+    return Object.assign(fromImage(nativeImage.createFromDataURL(url)), { page });
   } finally {
     w.destroy();
   }
