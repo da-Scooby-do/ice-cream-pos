@@ -350,6 +350,7 @@ function powershell(script, env, timeoutMs = 30_000) {
 
 /** حالة قائمة الطباعة في ويندوز | the Windows queue: status, port, waiting jobs */
 async function queueState(printer) {
+  if (process.platform !== "win32") return { state: "" };
   const r = await powershell(
     `$p = Get-Printer -Name $env:JAC_PRINTER -ErrorAction SilentlyContinue
 if (-not $p) { Write-Output "missing"; exit 0 }
@@ -364,6 +365,7 @@ Write-Output ("$($p.PrinterStatus) $($p.PortName) jobs $($jobs.Count) stuck $bad
 
 /** امسح المهام العالقة | remove this app's waiting jobs from the queue; returns how many */
 async function clearQueue(printer) {
+  if (process.platform !== "win32") return 0;
   const r = await powershell(
     `$jobs = @(Get-PrintJob -PrinterName $env:JAC_PRINTER -ErrorAction SilentlyContinue)
 foreach ($j in $jobs) { Remove-PrintJob -InputObject $j -ErrorAction SilentlyContinue }
