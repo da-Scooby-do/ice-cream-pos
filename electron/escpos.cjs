@@ -27,7 +27,9 @@ async function renderSlip(baseUrl, html) {
     width: DOTS,
     height: 800,
     useContentSize: true,
-    webPreferences: { offscreen: true, zoomFactor: ZOOM, backgroundThrottling: false },
+    // own in-memory session: Chromium shares zoom between every window of the
+    // same address, so without this the cashier's screen got zoomed in too
+    webPreferences: { offscreen: true, zoomFactor: ZOOM, backgroundThrottling: false, partition: "jac-print-render" },
   });
   try {
     await w.loadURL(`${baseUrl}/print-frame`);
@@ -43,16 +45,35 @@ async function renderSlip(baseUrl, html) {
     const height = Math.max(40, Math.ceil(cssHeight * ZOOM));
     w.setContentSize(DOTS, height);
     await new Promise((r) => setTimeout(r, 250));
-    const img = await w.webContents.capturePage({ x: 0, y: 0, width: DOTS, height });
+    // wait until a frame of the full size has really been painted
+    let img = null;
+    for (let i = 0; i < 10; i++) {
+      img = await w.webContents.capturePage({ x: 0, y: 0, width: DOTS, height });
+      const s = img.getSize();
+      if (s.width > 0 && s.height > 0 && inkOf(img.toBitmap()) > 0) break;
+      await new Promise((r) => setTimeout(r, 150));
+    }
     const size = img.getSize();
-    return { bitmap: img.toBitmap(), width: size.width, height: size.height };
+    const bitmap = img.toBitmap();
+    return { bitmap, width: size.width, height: size.height, png: img.toPNG(), ink: inkOf(bitmap) };
   } finally {
     w.destroy();
   }
 }
 
-/** صورة BGRA ← أوامر ESC/POS | BGRA bitmap → ESC/POS bytes */
-function toEscPos({ bitmap, width, height }, { cut = true, kick = false } = {}) {
+/** عدد النقاط الداكنة | how many dark pixels (an empty picture has none) */
+function inkOf(bitmap) {
+  let n = 0;
+  for (let i = 0; i < bitmap.length; i += 4) if (bitmap[i + 3] > 0 && bitmap[i] + bitmap[i + 1] + bitmap[i + 2] < 384) n++;
+  return n;
+}
+
+/**
+ * صورة BGRA ← أوامر ESC/POS | BGRA bitmap → ESC/POS bytes.
+ * raster "gsv0": GS v 0 raster image (most printers);
+ * raster "escstar": ESC * 24-dot bit image — older/cheaper printers that ignore GS v 0.
+ */
+function toEscPos({ bitmap, width, height }, { cut = true, kick = false, raster: mode = "gsv0" } = {}) {
   const bytesPerRow = Math.ceil(DOTS / 8);
   const scale = width / DOTS; // capture may come back at device pixel ratio
   const rows = Math.floor(height / scale);
@@ -62,7 +83,7 @@ function toEscPos({ bitmap, width, height }, { cut = true, kick = false } = {}) 
     for (let x = 0; x < DOTS; x++) {
       const sx = Math.min(width - 1, Math.floor(x * scale));
       const i = (sy * width + sx) * 4;
-      const lum = 0.114 * bitmap[i] + 0.587 * bitmap[i + 1] + 0.299 * bitmap[i + 2]; // B G R
+      const lum = bitmap[i + 3] === 0 ? 255 : 0.114 * bitmap[i] + 0.587 * bitmap[i + 1] + 0.299 * bitmap[i + 2]; // B G R (transparent = paper)
       if (lum < 170) raster[y * bytesPerRow + (x >> 3)] |= 0x80 >> (x & 7);
     }
   }
@@ -73,11 +94,25 @@ function toEscPos({ bitmap, width, height }, { cut = true, kick = false } = {}) 
 
   const parts = [Buffer.from([0x1b, 0x40])]; // ESC @ — reset
   if (kick) parts.push(Buffer.from([0x1b, 0x70, 0x00, 0x19, 0xfa])); // ESC p — open the cash drawer
-  const CHUNK = 128; // rows per raster command: small enough for any printer buffer
-  for (let y = 0; y < used; y += CHUNK) {
-    const h = Math.min(CHUNK, used - y);
-    parts.push(Buffer.from([0x1d, 0x76, 0x30, 0x00, bytesPerRow & 0xff, bytesPerRow >> 8, h & 0xff, h >> 8])); // GS v 0
-    parts.push(raster.subarray(y * bytesPerRow, (y + h) * bytesPerRow));
+  const dot = (x, y) => y < used && (raster[y * bytesPerRow + (x >> 3)] & (0x80 >> (x & 7))) !== 0;
+  if (mode === "escstar") {
+    // ESC * 33: bands 24 dots tall, 3 bytes per column, line spacing = 24 dots
+    parts.push(Buffer.from([0x1b, 0x33, 24])); // ESC 3 24
+    for (let y = 0; y < used; y += 24) {
+      const band = Buffer.alloc(DOTS * 3);
+      for (let x = 0; x < DOTS; x++) {
+        for (let k = 0; k < 24; k++) if (dot(x, y + k)) band[x * 3 + (k >> 3)] |= 0x80 >> (k & 7);
+      }
+      parts.push(Buffer.from([0x1b, 0x2a, 33, DOTS & 0xff, DOTS >> 8]), band, Buffer.from([0x0a]));
+    }
+    parts.push(Buffer.from([0x1b, 0x32])); // ESC 2 — default line spacing
+  } else {
+    const CHUNK = 128; // rows per raster command: small enough for any printer buffer
+    for (let y = 0; y < used; y += CHUNK) {
+      const h = Math.min(CHUNK, used - y);
+      parts.push(Buffer.from([0x1d, 0x76, 0x30, 0x00, bytesPerRow & 0xff, bytesPerRow >> 8, h & 0xff, h >> 8])); // GS v 0
+      parts.push(raster.subarray(y * bytesPerRow, (y + h) * bytesPerRow));
+    }
   }
   parts.push(Buffer.from([0x1b, 0x64, 0x04])); // ESC d 4 — feed past the cutter
   if (cut) parts.push(Buffer.from([0x1d, 0x56, 0x42, 0x10])); // GS V B — feed and partial cut
@@ -204,4 +239,13 @@ Write-Output "OK $port"`,
   return { ok: false, error: r.err.split("\n")[0] || r.out || "تعذر إعداد الطابعة" };
 }
 
-module.exports = { renderSlip, toEscPos, sendRaw, setupGenericPrinter, DOTS };
+/** اختبار نصي بسيط (بدون صور) | a plain-text test: proves the printer receives commands */
+function textTest() {
+  return Buffer.concat([
+    Buffer.from([0x1b, 0x40, 0x1b, 0x61, 0x01]), // reset, centre
+    Buffer.from("JAC ICE\nPRINTER TEST OK\n1234567890\n\n", "ascii"),
+    Buffer.from([0x1b, 0x64, 0x04, 0x1d, 0x56, 0x42, 0x10]), // feed, cut
+  ]);
+}
+
+module.exports = { renderSlip, toEscPos, sendRaw, setupGenericPrinter, textTest, inkOf, DOTS };

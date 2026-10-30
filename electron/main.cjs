@@ -36,9 +36,9 @@ if (!SMOKE && !app.requestSingleInstanceLock()) {
 const cfgFile = () => path.join(app.getPath("userData"), "desktop.json");
 function readCfg() {
   try {
-    return { printer: null, fullscreen: true, printMode: "auto", drawer: false, ...JSON.parse(fs.readFileSync(cfgFile(), "utf8")) };
+    return { printer: null, fullscreen: true, printMode: "auto", drawer: false, raster: "gsv0", ...JSON.parse(fs.readFileSync(cfgFile(), "utf8")) };
   } catch {
-    return { printer: null, fullscreen: true, printMode: "auto", drawer: false };
+    return { printer: null, fullscreen: true, printMode: "auto", drawer: false, raster: "gsv0" };
   }
 }
 function writeCfg(c) {
@@ -175,6 +175,9 @@ function createWindow() {
     }
   });
   win.webContents.setVisualZoomLevelLimits(1, 1);
+  // always 100%: older versions could leave the screen zoomed in (shared zoom
+  // with the receipt-drawing window); Chromium remembers zoom per address
+  win.webContents.on("did-finish-load", () => win?.webContents.setZoomFactor(1));
   // لا روابط خارجية داخل البرنامج | external links open in the browser
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:/.test(url)) void shell.openExternal(url);
@@ -245,6 +248,7 @@ function pickPrinter(printers, chosen) {
   };
 }
 
+const lastReceiptPng = () => path.join(app.getPath("userData"), "logs", "last-receipt.png");
 const RAW_ONLY = /jac ice receipt|generic\s*\/\s*text only/i;
 
 /** طباعة مباشرة ESC/POS أم عبر تعريف ويندوز؟ | print raw ESC/POS or through the driver? */
@@ -272,9 +276,19 @@ async function printFrom(webContents, opts = {}) {
     try {
       const t0 = Date.now();
       const bmp = await escpos.renderSlip(base(), opts.html);
-      const bytes = escpos.toEscPos(bmp, { cut: true, kick: !!opts.kick && !!cfg.drawer });
+      // keep the last receipt picture: «فتح صورة آخر فاتورة» shows exactly what was sent
+      try {
+        fs.writeFileSync(lastReceiptPng(), bmp.png);
+      } catch {
+        /* diagnostics only */
+      }
+      if (bmp.ink < 300) {
+        log(`ESC/POS slip came out empty (${bmp.width}x${bmp.height}, ink ${bmp.ink}) — not sent`);
+        throw new Error("صورة الفاتورة خرجت فارغة — أعد المحاولة");
+      }
+      const bytes = escpos.toEscPos(bmp, { cut: true, kick: !!opts.kick && !!cfg.drawer, raster: cfg.raster || "gsv0" });
       const r = await escpos.sendRaw(target.name, bytes, app.getPath("userData"));
-      log(`ESC/POS ${bmp.width}x${bmp.height} → ${bytes.length} bytes, ${r.ok ? "sent" : "failed"} in ${Date.now() - t0} ms`);
+      log(`ESC/POS ${bmp.width}x${bmp.height} ink ${bmp.ink} (${cfg.raster || "gsv0"}) → ${bytes.length} bytes, ${r.ok ? "sent" : "failed"} in ${Date.now() - t0} ms`);
       if (r.ok) return { ok: true };
       log("raw print failed:", r.error);
       if ((cfg.printMode || "auto") === "raw" || RAW_ONLY.test(target.name)) {
@@ -353,6 +367,25 @@ function registerIpc() {
   };
   ipcMain.handle("pos:print", guard((e, opts) => printFrom(e.sender, opts || {})));
   ipcMain.handle(
+    "pos:testPrinter",
+    guard(async (e) => {
+      const printers = await e.sender.getPrintersAsync();
+      const target = pickPrinter(printers, readCfg().printer);
+      if (target.error) return { ok: false, error: target.error };
+      const r = await escpos.sendRaw(target.name, escpos.textTest(), app.getPath("userData"));
+      log(`text test → «${target.name}»: ${r.ok ? "sent" : r.error}`);
+      return r.ok ? { ok: true, printer: target.name } : r;
+    })
+  );
+  ipcMain.handle(
+    "pos:openLastReceipt",
+    guard(async () => {
+      if (!fs.existsSync(lastReceiptPng())) return { ok: false, error: "لا توجد صورة بعد — اطبع فاتورة أولاً" };
+      await shell.openPath(lastReceiptPng());
+      return { ok: true };
+    })
+  );
+  ipcMain.handle(
     "pos:setupReceiptPrinter",
     guard(async () => {
       const r = await escpos.setupGenericPrinter("JAC ICE Receipt", RECEIPT_PRINTER.source);
@@ -382,6 +415,7 @@ function registerIpc() {
       if (patch && "printer" in patch) next.printer = typeof patch.printer === "string" && patch.printer ? patch.printer : null;
       if (patch && "printMode" in patch) next.printMode = ["auto", "raw", "driver"].includes(patch.printMode) ? patch.printMode : "auto";
       if (patch && "drawer" in patch) next.drawer = !!patch.drawer;
+      if (patch && "raster" in patch) next.raster = patch.raster === "escstar" ? "escstar" : "gsv0";
       if (patch && "fullscreen" in patch) {
         next.fullscreen = !!patch.fullscreen;
         win?.setFullScreen(next.fullscreen);

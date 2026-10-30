@@ -17,13 +17,22 @@ export type UpdateState = {
 };
 
 export type PrintMode = "auto" | "raw" | "driver";
-export type PrinterConfig = { printer: string | null; fullscreen: boolean; printMode: PrintMode; drawer: boolean };
+export type RasterMode = "gsv0" | "escstar";
+export type PrinterConfig = {
+  printer: string | null;
+  fullscreen: boolean;
+  printMode: PrintMode;
+  drawer: boolean;
+  raster: RasterMode;
+};
 
 export type DesktopBridge = {
   isDesktop: true;
   print(opts: { heightMicrons: number; html?: string; kick?: boolean }): Promise<{ ok: boolean; error?: string }>;
   listPrinters(): Promise<{ name: string; displayName: string; isDefault: boolean; virtual?: boolean; receipt?: boolean }[]>;
   setupReceiptPrinter(): Promise<{ ok: boolean; port?: string; error?: string }>;
+  testPrinter(): Promise<{ ok: boolean; printer?: string; error?: string }>;
+  openLastReceipt(): Promise<{ ok: boolean; error?: string }>;
   getConfig(): Promise<PrinterConfig>;
   setConfig(c: Partial<PrinterConfig>): Promise<void>;
   chooseFolder(): Promise<string | null>;

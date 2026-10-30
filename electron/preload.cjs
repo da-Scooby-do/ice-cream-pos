@@ -7,6 +7,8 @@ contextBridge.exposeInMainWorld("desktop", {
   print: (opts) => ipcRenderer.invoke("pos:print", opts),
   listPrinters: () => ipcRenderer.invoke("pos:printers"),
   setupReceiptPrinter: () => ipcRenderer.invoke("pos:setupReceiptPrinter"),
+  testPrinter: () => ipcRenderer.invoke("pos:testPrinter"),
+  openLastReceipt: () => ipcRenderer.invoke("pos:openLastReceipt"),
   getConfig: () => ipcRenderer.invoke("pos:getConfig"),
   setConfig: (patch) => ipcRenderer.invoke("pos:setConfig", patch),
   chooseFolder: () => ipcRenderer.invoke("pos:chooseFolder"),

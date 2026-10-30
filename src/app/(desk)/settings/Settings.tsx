@@ -30,7 +30,7 @@ import { PrintButton } from "@/components/PrintHost";
 import { ReceiptSlip } from "@/components/slips";
 import { ErrorNote, Field, Modal, NumInput, OkNote, Segmented, Toggle, useAction } from "@/components/ui";
 import { num } from "@/lib/format";
-import { useIsDesktop, type PrintMode, type UpdateState } from "@/lib/print";
+import { useIsDesktop, type PrintMode, type RasterMode, type UpdateState } from "@/lib/print";
 import { stamp } from "@/lib/time";
 import type { Receipt, Shop } from "@/lib/types";
 
@@ -165,6 +165,8 @@ function PrinterCard({ shop }: { shop: Shop }) {
   const [printer, setPrinter] = useState<string>("");
   const [mode, setMode] = useState<PrintMode>("auto");
   const [drawer, setDrawer] = useState(false);
+  const [raster, setRaster] = useState<RasterMode>("gsv0");
+  const [diag, setDiag] = useState<{ ok?: string; error?: string }>({});
   const [fullscreen, setFullscreen] = useState(true);
   const [setup, setSetup] = useState<{ busy: boolean; ok?: string; error?: string }>({ busy: false });
   const desktop = useIsDesktop();
@@ -176,6 +178,7 @@ function PrinterCard({ shop }: { shop: Shop }) {
       setPrinter(c.printer ?? "");
       setMode(c.printMode ?? "auto");
       setDrawer(!!c.drawer);
+      setRaster(c.raster ?? "gsv0");
       setFullscreen(c.fullscreen);
     });
   };
@@ -261,6 +264,47 @@ function PrinterCard({ shop }: { shop: Shop }) {
 
           <div className="flex flex-wrap gap-2">
             <PrintButton slip={<ReceiptSlip r={{ ...SAMPLE, number: 0 }} shop={shop} />} label="طباعة فاتورة تجربة" />
+            <button
+              type="button"
+              className="btn-soft px-4 py-2.5 text-sm"
+              onClick={async () => {
+                setDiag({});
+                const r = await window.desktop!.testPrinter();
+                setDiag(r.ok ? { ok: `أُرسل اختبار نصي إلى «${r.printer}» — يجب أن تطبع «PRINTER TEST OK»` } : { error: r.error });
+              }}
+            >
+              اختبار الاتصال (نص فقط)
+            </button>
+            <button
+              type="button"
+              className="btn-ghost px-4 py-2.5 text-sm"
+              onClick={async () => {
+                const r = await window.desktop!.openLastReceipt();
+                if (!r.ok) setDiag({ error: r.error });
+              }}
+            >
+              فتح صورة آخر فاتورة
+            </button>
+          </div>
+          {diag.ok && <OkNote>{diag.ok}</OkNote>}
+          <ErrorNote error={diag.error ?? null} />
+
+          <div className="space-y-1.5">
+            <span className="label block">طريقة رسم الفاتورة (للطباعة المباشرة)</span>
+            <Segmented<RasterMode>
+              value={raster}
+              onChange={async (v) => {
+                setRaster(v);
+                await window.desktop?.setConfig({ raster: v });
+              }}
+              options={[
+                { value: "gsv0", label: "الطريقة 1" },
+                { value: "escstar", label: "الطريقة 2" },
+              ]}
+            />
+            <p className="text-xs text-ink-400">
+              إذا خرجت الورقة فارغة أو رموزاً مع أن «اختبار الاتصال» يطبع جيداً، جرّب الطريقة الأخرى ثم اطبع فاتورة تجربة.
+            </p>
           </div>
 
           <Toggle
